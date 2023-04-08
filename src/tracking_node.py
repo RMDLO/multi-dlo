@@ -139,7 +139,6 @@ def indices_array(n):
 
 
 def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol):
-# def cpd_lle (X, Y_0, beta, alpha, H, gamma, mu, max_iter, tol):
 
     # define params
     M = len(Y_0)
@@ -218,103 +217,62 @@ def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol):
 
     return Y
 
-def find_closest (pt, arr):
-    closest = arr[0].copy()
-    min_dis = np.sqrt((pt[0] - closest[0])**2 + (pt[1] - closest[1])**2 + (pt[2] - closest[2])**2)
-    idx = 0
+def sort_pts(self, Y_0):
+    diff = Y_0[:, None, :] - Y_0[None, :,  :]
+    diff = np.square(diff)
+    diff = np.sum(diff, 2)
 
-    for i in range (0, len(arr)):
-        cur_pt = arr[i].copy()
-        cur_dis = np.sqrt((pt[0] - cur_pt[0])**2 + (pt[1] - cur_pt[1])**2 + (pt[2] - cur_pt[2])**2)
-        if cur_dis < min_dis:
-            min_dis = cur_dis
-            closest = arr[i].copy()
-            idx = i
-    
-    return closest, idx
+    N = len(diff)
+    G = diff.copy()
 
-def find_opposite_closest (pt, arr, direction_pt):
-    arr_copy = arr.copy()
-    opposite_closest_found = False
-    opposite_closest = pt.copy()  # will get overwritten
+    selected_node = np.zeros(N,).tolist()
+    selected_node[0] = True
+    Y_0_sorted = []
+        
+    reverse = 0
+    counter = 0
+    reverse_on = 0
+    insertion_counter = 0
+    last_visited_b = 0
+    while (counter < N - 1):
+        
+        minimum = 999999
+        a = 0
+        b = 0
+        for m in range(N):
+            if selected_node[m]:
+                for n in range(N):
+                    if ((not selected_node[n]) and G[m][n]):  
+                        # not in selected and there is an edge
+                        if minimum > G[m][n]:
+                            minimum = G[m][n]
+                            a = m
+                            b = n
 
-    while (not opposite_closest_found) and (len(arr_copy) != 0):
-        cur_closest, cur_index = find_closest (pt, arr_copy)
-        arr_copy.pop (cur_index)
+        if len(Y_0_sorted) == 0:
+            Y_0_sorted.append(Y_0[a].tolist())
+            Y_0_sorted.append(Y_0[b].tolist())
+        else:
+            if last_visited_b != a:
+                reverse += 1
+                reverse_on = a
+                insertion_counter = 0
 
-        vec1 = np.array(cur_closest) - np.array(pt)
-        vec2 = np.array(direction_pt) - np.array(pt)
+            if reverse % 2 == 1:
+                # switch direction
+                Y_0_sorted.insert(Y_0_sorted.index(Y_0[a].tolist()), Y_0[b].tolist())
+            elif reverse != 0:
+                Y_0_sorted.insert(Y_0_sorted.index(Y_0[reverse_on].tolist())+1+insertion_counter, Y_0[b].tolist())
+                insertion_counter += 1
+            else:
+                Y_0_sorted.append(Y_0[b].tolist())
 
-        # threshold: 0.05m
-        if (np.dot (vec1, vec2) < 0) and (pt2pt_dis_sq(np.array(cur_closest), np.array(pt)) < 0.05**2):
-            opposite_closest_found = True
-            opposite_closest = cur_closest.copy()
-            break
-    
-    return opposite_closest, opposite_closest_found
+        last_visited_b = b
+        selected_node[b] = True
 
-def sort_pts (pts_orig):
+        counter += 1
 
-    start_idx = 5
-
-    pts = pts_orig.copy()
-    starting_pt = pts[start_idx].copy()
-    pts.pop(start_idx)
-    # starting point will be the current first point in the new list
-    sorted_pts = []
-    sorted_pts.append(starting_pt)
-
-    # get the first closest point
-    closest_1, min_idx = find_closest (starting_pt, pts)
-    sorted_pts.append(closest_1)
-    pts.pop(min_idx)
-
-    # get the second closest point
-    closest_2, found = find_opposite_closest(starting_pt, pts, closest_1)
-    true_start = False
-    if not found:
-        # closest 1 is true start
-        true_start = True
-    # closest_2 is not popped from pts
-
-    # move through the rest of pts to build the sorted pt list
-    # if true_start:
-    #   can proceed until pts is empty
-    # if !true_start:
-    #   start in the direction of closest_1, the list would build until one end is reached. 
-    #   in that case the next closest point would be closest_2. starting that point, all 
-    #   newly added points to sorted_pts should be inserted at the front
-    while len(pts) != 0:
-        cur_target = sorted_pts[-1]
-        cur_direction = sorted_pts[-2]
-        cur_closest, found = find_opposite_closest(cur_target, pts, cur_direction)
-
-        if not found:
-            print ("not found!")
-            break
-
-        sorted_pts.append(cur_closest)
-        pts.remove (cur_closest)
-
-    # begin the second loop that inserts new points at front
-    if not true_start:
-        # first insert closest_2 at front and pop it from pts
-        sorted_pts.insert(0, closest_2)
-        pts.remove(closest_2)
-
-        while len(pts) != 0:
-            cur_target = sorted_pts[0]
-            cur_direction = sorted_pts[1]
-            cur_closest, found = find_opposite_closest(cur_target, pts, cur_direction)
-
-            if not found:
-                print ("not found!")
-                break
-
-            sorted_pts.insert(0, cur_closest)
-            pts.remove(cur_closest)
-
-    return sorted_pts
+    return np.array(Y_0_sorted)
 
 saved = False
 initialized = False
@@ -327,7 +285,6 @@ def callback (rgb, depth, pc):
     global initialized
     global init_nodes
     global nodes
-    # global H
     global cur_time
 
     proj_matrix = np.array([[918.359130859375,              0.0, 645.8908081054688, 0.0], \
@@ -338,11 +295,6 @@ def callback (rgb, depth, pc):
     cur_image = ros_numpy.numpify(rgb)
     # cur_image = cv2.cvtColor(cur_image.copy(), cv2.COLOR_BGR2RGB)
     hsv_image = cv2.cvtColor(cur_image.copy(), cv2.COLOR_RGB2HSV)
-
-    # # test
-    # cv2.imshow('img', cur_image)
-    # cv2.waitKey(0) 
-    # cv2.destroyAllWindows()
 
     # process depth image
     cur_depth = ros_numpy.numpify(depth)
@@ -372,18 +324,6 @@ def callback (rgb, depth, pc):
     # filtered_pc = filtered_pc[filtered_pc[:, 2] < 0.605]
     filtered_pc = filtered_pc[filtered_pc[:, 2] > 0.4]
     # print('filtered pc shape = ', np.shape(filtered_pc))
-
-    # # save points
-    # if not saved:
-    #     username = 'ablcts18'
-    #     folder = 'tracking/'
-    #     f = open("/home/" + username + "/Research/" + folder + "ros_pc.json", 'wb')
-    #     pkl.dump(filtered_pc, f)
-    #     f.close()
-    #     saved = True
-
-    # downsample to 2.5%
-    # filtered_pc = filtered_pc[::int(1/0.1)]
 
     # downsample with open3d
     pcd = o3d.geometry.PointCloud()
@@ -416,73 +356,27 @@ def callback (rgb, depth, pc):
         print('filtered wire 3 shape = ', np.shape(wire3_pc))
 
         # get nodes for wire 1
-        init_nodes_1, _ = register(wire1_pc, 15, mu=0, max_iter=50)
+        init_nodes_1, _ = register(wire1_pc, nodes_per_wire, mu=0, max_iter=50)
         init_nodes_1 = np.array(sort_pts(init_nodes_1.tolist()))
-        # add color
-        init_nodes_1_rgba = struct.unpack('I', struct.pack('BBBB', 0, 0, 0, 255))[0]
-        init_nodes_1_rgba_arr = np.full((len(init_nodes_1), 1), init_nodes_1_rgba)
-        init_nodes_1_colored = np.hstack((init_nodes_1, init_nodes_1_rgba_arr)).astype('O')
-        init_nodes_1_colored[:, 3] = init_nodes_1_colored[:, 3].astype(int)
-        header.stamp = rospy.Time.now()
-        converted_nodes_1 = pcl2.create_cloud(header, fields, init_nodes_1_colored)
-        init_nodes_1_pub.publish(converted_nodes_1)
 
         # get nodes for wire 2
-        init_nodes_2, _ = register(wire2_pc, 15, mu=0, max_iter=50)
+        init_nodes_2, _ = register(wire2_pc, nodes_per_wire, mu=0, max_iter=50)
         init_nodes_2 = np.array(sort_pts(init_nodes_2.tolist()))
-        # add color
-        init_nodes_2_rgba = struct.unpack('I', struct.pack('BBBB', 255, 255, 255, 255))[0]
-        init_nodes_2_rgba_arr = np.full((len(init_nodes_2), 1), init_nodes_2_rgba)
-        init_nodes_2_colored = np.hstack((init_nodes_2, init_nodes_2_rgba_arr)).astype('O')
-        init_nodes_2_colored[:, 3] = init_nodes_2_colored[:, 3].astype(int)
-        header.stamp = rospy.Time.now()
-        converted_nodes_2 = pcl2.create_cloud(header, fields, init_nodes_2_colored)
-        init_nodes_2_pub.publish(converted_nodes_2)
 
         # get nodes for wire 3
-        init_nodes_3, _ = register(wire3_pc, 15, mu=0, max_iter=50)
+        init_nodes_3, _ = register(wire3_pc, nodes_per_wire, mu=0, max_iter=50)
         init_nodes_3 = np.array(sort_pts(init_nodes_3.tolist()))
-        # add color
-        init_nodes_3_rgba = struct.unpack('I', struct.pack('BBBB', 255, 255, 255, 255))[0]
-        init_nodes_3_rgba_arr = np.full((len(init_nodes_3), 1), init_nodes_3_rgba)
-        init_nodes_3_colored = np.hstack((init_nodes_3, init_nodes_3_rgba_arr)).astype('O')
-        init_nodes_3_colored[:, 3] = init_nodes_3_colored[:, 3].astype(int)
-        header.stamp = rospy.Time.now()
-        converted_nodes_3 = pcl2.create_cloud(header, fields, init_nodes_3_colored)
-        init_nodes_3_pub.publish(converted_nodes_3)
 
-        # # get nodes for wire 4
-        # init_nodes_4, _ = register(wire4_pc, 15, mu=0, max_iter=50)
-        # init_nodes_4 = np.array(sort_pts(init_nodes_4.tolist()))
-        # # add color
-        # init_nodes_4_rgba = struct.unpack('I', struct.pack('BBBB', 255, 255, 255, 255))[0]
-        # init_nodes_4_rgba_arr = np.full((len(init_nodes_4), 1), init_nodes_4_rgba)
-        # init_nodes_4_colored = np.hstack((init_nodes_4, init_nodes_4_rgba_arr)).astype('O')
-        # init_nodes_4_colored[:, 3] = init_nodes_4_colored[:, 3].astype(int)
-        # header.stamp = rospy.Time.now()
-        # converted_nodes_4 = pcl2.create_cloud(header, fields, init_nodes_4_colored)
-        # init_nodes_4_pub.publish(converted_nodes_4)
-
-        init_nodes = np.vstack((init_nodes_1, init_nodes_2, init_nodes_3))
-
-        # # get the LLE matrix
-        # L = calc_LLE_weights(2, init_nodes)
-        # H = np.matmul((np.identity(len(init_nodes)) - L).T, np.identity(len(init_nodes)) - L)
         initialized = True
-        # header.stamp = rospy.Time.now()
-        # converted_init_nodes = pcl2.create_cloud(header, fields, init_nodes)
-        # init_nodes_pub.publish(converted_init_nodes)
 
     # cpd
     if initialized:
         nodes = cpd_lle(X=filtered_pc, Y_0 = init_nodes, beta=2, alpha=1, k=6, gamma=3, mu=0.05, max_iter=30, tol=0.00001)
-        # nodes = cpd_lle(X=filtered_pc, Y_0 = init_nodes, beta=1, alpha=1, H=H, gamma=2, mu=0.05, max_iter=30, tol=0.00001)
         init_nodes = nodes
 
         nodes_1 = nodes[0 : nodes_per_wire]
         nodes_2 = nodes[nodes_per_wire : (2*nodes_per_wire)]
         nodes_3 = nodes[(2*nodes_per_wire) : (3*nodes_per_wire)]
-        # nodes_4 = nodes[(3*nodes_per_wire) : len(nodes)]
 
         # add color
         nodes_1_rgba = struct.unpack('I', struct.pack('BBBB', 0, 0, 0, 255))[0]
@@ -508,14 +402,6 @@ def callback (rgb, depth, pc):
         header.stamp = rospy.Time.now()
         converted_nodes_3 = pcl2.create_cloud(header, fields, nodes_3_colored)
         nodes_3_pub.publish(converted_nodes_3)
-        # # add color
-        # nodes_4_rgba = struct.unpack('I', struct.pack('BBBB', 0, 255, 0, 255))[0]
-        # nodes_4_rgba_arr = np.full((len(nodes_4), 1), nodes_4_rgba)
-        # nodes_4_colored = np.hstack((nodes_4, nodes_4_rgba_arr)).astype('O')
-        # nodes_4_colored[:, 3] = nodes_4_colored[:, 3].astype(int)
-        # header.stamp = rospy.Time.now()
-        # converted_nodes_4 = pcl2.create_cloud(header, fields, nodes_4_colored)
-        # nodes_4_pub.publish(converted_nodes_4)
 
         # project and pub image
         nodes_h = np.hstack((nodes, np.ones((len(nodes), 1))))
@@ -570,15 +456,9 @@ if __name__=='__main__':
                 PointField('rgba', 12, PointField.UINT32, 1)]
     pc_pub = rospy.Publisher ('/pts', PointCloud2, queue_size=10)
 
-    init_nodes_1_pub = rospy.Publisher ('/init_nodes_1', PointCloud2, queue_size=10)
-    init_nodes_2_pub = rospy.Publisher ('/init_nodes_2', PointCloud2, queue_size=10)
-    init_nodes_3_pub = rospy.Publisher ('/init_nodes_3', PointCloud2, queue_size=10)
-    # init_nodes_4_pub = rospy.Publisher ('/init_nodes_4', PointCloud2, queue_size=10)
-
     nodes_1_pub = rospy.Publisher ('/nodes_1', PointCloud2, queue_size=10)
     nodes_2_pub = rospy.Publisher ('/nodes_2', PointCloud2, queue_size=10)
     nodes_3_pub = rospy.Publisher ('/nodes_3', PointCloud2, queue_size=10)
-    # nodes_4_pub = rospy.Publisher ('/nodes_4', PointCloud2, queue_size=10)
 
     tracking_img_pub = rospy.Publisher ('/tracking_img', Image, queue_size=10)
     mask_img_pub = rospy.Publisher('/mask', Image, queue_size=10)
