@@ -435,7 +435,6 @@ def callback (rgb, depth, pc):
         wire1_pc = filtered_pc[filtered_pc[:, 0] > 0.12]
         wire2_pc = filtered_pc[(0.12 > filtered_pc[:, 0]) & (filtered_pc[:, 0] > 0)]
         wire3_pc = filtered_pc[(-0.15 < filtered_pc[:, 0]) & (filtered_pc[:, 0] < 0)]
-        # wire4_pc = filtered_pc[filtered_pc[:, 0] < -0.15]
 
         print('filtered wire 1 shape = ', np.shape(wire1_pc))
         print('filtered wire 2 shape = ', np.shape(wire2_pc))
@@ -443,16 +442,17 @@ def callback (rgb, depth, pc):
 
         # get nodes for wire 1
         init_nodes_1, _ = register(wire1_pc, nodes_per_wire, mu=0, max_iter=50)
-        init_nodes_1 = np.array(sort_pts(init_nodes_1.tolist()))
+        init_nodes_1 = np.array(sort_pts(init_nodes_1))
 
         # get nodes for wire 2
         init_nodes_2, _ = register(wire2_pc, nodes_per_wire, mu=0, max_iter=50)
-        init_nodes_2 = np.array(sort_pts(init_nodes_2.tolist()))
+        init_nodes_2 = np.array(sort_pts(init_nodes_2))
 
         # get nodes for wire 3
         init_nodes_3, _ = register(wire3_pc, nodes_per_wire, mu=0, max_iter=50)
-        init_nodes_3 = np.array(sort_pts(init_nodes_3.tolist()))
+        init_nodes_3 = np.array(sort_pts(init_nodes_3))
 
+        init_nodes = np.vstack((init_nodes_1, init_nodes_2, init_nodes_3))
         initialized = True
 
     # cpd
