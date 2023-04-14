@@ -173,6 +173,25 @@ def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol, use_decoupling=Fa
         
     Y = Y_0.copy()
 
+    # set up converted node dis
+    converted_node_dis = []
+    seg_dis = np.sqrt(np.sum(np.square(np.diff(Y_0, axis=0)), axis=1))
+    converted_node_coord = []
+    last_pt = 0
+    converted_node_coord.append(last_pt)
+    for i in range (0, num_of_wires):
+        last_pt += i*10.0
+        for j in range (0, nodes_per_wire):
+            if i == 0 and j == 0:
+                continue
+            last_pt += seg_dis[i*nodes_per_wire+j-1]
+            converted_node_coord.append(last_pt)
+    converted_node_coord = np.array(converted_node_coord)
+    converted_node_dis = np.abs(converted_node_coord[None, :] - converted_node_coord[:, None])
+    # converted_node_dis_sq = np.square(converted_node_dis)
+    print("len(converted_node_dis) = ", len(converted_node_dis))
+    print(converted_node_dis)
+
     # initialize sigma2
     if not use_prev_sigma2 or sigma2_0 == 0:
         (N, D) = X.shape
@@ -182,6 +201,10 @@ def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol, use_decoupling=Fa
         sigma2 = np.sum(err) / (D * M * N)
     else:
         sigma2 = sigma2_0
+
+    print("=== sigma2 ===")
+    print(sigma2)
+    print("========")
 
     # get the LLE matrix
     L = calc_LLE_weights(k, Y_0)
@@ -204,6 +227,46 @@ def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol, use_decoupling=Fa
         den += c
 
         P = np.divide(P, den)
+        max_p_nodes = np.argmax(P, axis=0)
+
+        if use_decoupling:
+            potential_2nd_max_p_nodes_1 = max_p_nodes - 1
+            potential_2nd_max_p_nodes_2 = max_p_nodes + 1
+            potential_2nd_max_p_nodes_1 = np.where(potential_2nd_max_p_nodes_1 < 0, 1, potential_2nd_max_p_nodes_1)
+            potential_2nd_max_p_nodes_2 = np.where(potential_2nd_max_p_nodes_2 > M-1, M-2, potential_2nd_max_p_nodes_2)
+            potential_2nd_max_p_nodes_1_select = np.vstack((np.arange(0, N), potential_2nd_max_p_nodes_1)).T
+            potential_2nd_max_p_nodes_2_select = np.vstack((np.arange(0, N), potential_2nd_max_p_nodes_2)).T
+            potential_2nd_max_p_1 = P.T[tuple(map(tuple, potential_2nd_max_p_nodes_1_select.T))]
+            potential_2nd_max_p_2 = P.T[tuple(map(tuple, potential_2nd_max_p_nodes_2_select.T))]
+            next_max_p_nodes = np.where(potential_2nd_max_p_1 > potential_2nd_max_p_2, potential_2nd_max_p_nodes_1, potential_2nd_max_p_nodes_2)
+            node_indices_diff = max_p_nodes - next_max_p_nodes
+            max_node_smaller_index = np.arange(0, N)[node_indices_diff < 0]
+            max_node_larger_index = np.arange(0, N)[node_indices_diff > 0]
+            dis_to_max_p_nodes = np.sqrt(np.sum(np.square(Y[max_p_nodes]-X), axis=1))
+            dis_to_2nd_largest_p_nodes = np.sqrt(np.sum(np.square(Y[next_max_p_nodes]-X), axis=1))
+            converted_P = np.zeros((M, N)).T
+
+            for idx in max_node_smaller_index:
+                converted_P[idx, 0:max_p_nodes[idx]+1] = converted_node_dis[max_p_nodes[idx], 0:max_p_nodes[idx]+1] + dis_to_max_p_nodes[idx]
+                converted_P[idx, next_max_p_nodes[idx]:M] = converted_node_dis[next_max_p_nodes[idx], next_max_p_nodes[idx]:M] + dis_to_2nd_largest_p_nodes[idx]
+
+            for idx in max_node_larger_index:
+                converted_P[idx, 0:next_max_p_nodes[idx]+1] = converted_node_dis[next_max_p_nodes[idx], 0:next_max_p_nodes[idx]+1] + dis_to_2nd_largest_p_nodes[idx]
+                converted_P[idx, max_p_nodes[idx]:M] = converted_node_dis[max_p_nodes[idx], max_p_nodes[idx]:M] + dis_to_max_p_nodes[idx]
+
+            converted_P = converted_P.T
+
+            P = np.exp(-np.square(converted_P) / (2 * sigma2))
+            den = np.sum(P, axis=0)
+            den = np.tile(den, (M, 1))
+            den[den == 0] = np.finfo(float).eps
+            c = (2 * np.pi * sigma2) ** (D / 2)
+            c = c * mu / (1 - mu)
+            c = c * M / N
+            den += c
+
+            P = np.divide(P, den)
+
         Pt1 = np.sum(P, axis=0)
         P1 = np.sum(P, axis=1)
         Np = np.sum(P1)
