@@ -24,7 +24,7 @@ from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
 # temp
-nodes_per_wire = 15
+nodes_per_wire = 20
 num_of_wires = 3
 
 def pt2pt_dis_sq(pt1, pt2):
@@ -189,8 +189,8 @@ def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol, use_decoupling=Fa
     converted_node_coord = np.array(converted_node_coord)
     converted_node_dis = np.abs(converted_node_coord[None, :] - converted_node_coord[:, None])
     # converted_node_dis_sq = np.square(converted_node_dis)
-    print("len(converted_node_dis) = ", len(converted_node_dis))
-    print(converted_node_dis)
+    # print("len(converted_node_dis) = ", len(converted_node_dis))
+    # print(converted_node_dis)
 
     # initialize sigma2
     if not use_prev_sigma2 or sigma2_0 == 0:
@@ -202,9 +202,9 @@ def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol, use_decoupling=Fa
     else:
         sigma2 = sigma2_0
 
-    print("=== sigma2 ===")
-    print(sigma2)
-    print("========")
+    # print("=== sigma2 ===")
+    # print(sigma2)
+    # print("========")
 
     # get the LLE matrix
     L = calc_LLE_weights(k, Y_0)
@@ -386,9 +386,9 @@ def ndarray2MarkerArray (Y, marker_frame, node_colors, line_colors, num_of_wires
             cur_node_result.pose.orientation.y = 0.0
             cur_node_result.pose.orientation.z = 0.0
 
-            cur_node_result.scale.x = 0.008
-            cur_node_result.scale.y = 0.008
-            cur_node_result.scale.z = 0.008
+            cur_node_result.scale.x = 0.006
+            cur_node_result.scale.y = 0.006
+            cur_node_result.scale.z = 0.006
             cur_node_result.color.r = node_colors[i, 0]
             cur_node_result.color.g = node_colors[i, 1]
             cur_node_result.color.b = node_colors[i, 2]
@@ -507,9 +507,9 @@ def callback (rgb, depth, pc):
     # register nodes
     if not initialized:
         # try four wires
-        wire1_pc = filtered_pc[filtered_pc[:, 0] > 0.06]
-        wire2_pc = filtered_pc[(0.06 > filtered_pc[:, 0]) & (filtered_pc[:, 0] > -0.06)]
-        wire3_pc = filtered_pc[filtered_pc[:, 0] < -0.06]
+        wire1_pc = filtered_pc[filtered_pc[:, 0] > 0.05]
+        wire2_pc = filtered_pc[(0.05 > filtered_pc[:, 0]) & (filtered_pc[:, 0] > 0.01)]
+        wire3_pc = filtered_pc[filtered_pc[:, 0] < 0.01]
         # wire3_pc = filtered_pc[(-0.15 < filtered_pc[:, 0]) & (filtered_pc[:, 0] < 0)]
 
         print('filtered wire 1 shape = ', np.shape(wire1_pc))
@@ -561,7 +561,8 @@ def callback (rgb, depth, pc):
         tracking_img = cur_image.copy()
         # print('nodes shape = ', np.shape(nodes))
 
-        node_colors = np.array([[255, 0, 0, 0.7], [255, 255, 0, 0.7], [0, 255, 0, 0.7]])
+        alpha = 1
+        node_colors = np.array([[255, 0, 0, alpha], [255, 255, 0, alpha], [0, 255, 0, alpha]])
         line_colors = node_colors.copy()
         
         for i in range (0, num_of_wires):
