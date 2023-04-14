@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 
 import time
+import sys
 
 import message_filters
 import open3d as o3d
@@ -144,7 +145,8 @@ def indices_array(n):
     return out
 
 
-def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol):
+def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol, use_decoupling=False, use_prev_sigma2=False, sigma2_0=None):
+# def cpd_lle (X, Y_0, beta, alpha, H, gamma, mu, max_iter, tol):
 
     # define params
     M = len(Y_0)
@@ -160,38 +162,26 @@ def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol):
 
     # nodes on different wires should never interfere
     G = np.zeros((M, M))
-    for i in range (0, num_of_wires):
-        # copy information from the G matrix over
-        start = i * nodes_per_wire
-        end = (i + 1) * nodes_per_wire
-        G[start:end, start:end] = G_orig[start:end, start:end] 
-    
+    if use_decoupling:
+        for i in range (0, num_of_wires):
+            # copy information from the G matrix over
+            start = i * nodes_per_wire
+            end = (i + 1) * nodes_per_wire
+            G[start:end, start:end] = G_orig[start:end, start:end] 
+    else:
+        G = G_orig.copy()
+        
     Y = Y_0.copy()
 
-    # # set up converted node dis
-    # converted_node_dis = []
-    # seg_dis = np.sqrt(np.sum(np.square(np.diff(Y_0, axis=0)), axis=1))
-    # converted_node_coord = []
-    # last_pt = 0
-    # converted_node_coord.append(last_pt)
-    # for i in range (0, num_of_wires):
-    #     for j in range (0, nodes_per_wire):
-    #         if i == 0 and j == 0:
-    #             continue
-    #         last_pt += seg_dis[i*nodes_per_wire+j-1]
-    #         converted_node_coord.append(last_pt)
-    # converted_node_coord = np.array(converted_node_coord)
-    # converted_node_dis = np.abs(converted_node_coord[None, :] - converted_node_coord[:, None])
-    # # converted_node_dis_sq = np.square(converted_node_dis)
-    # print("len(converted_node_dis) = ", len(converted_node_dis))
-    # print(converted_node_dis)
-
     # initialize sigma2
-    (N, D) = X.shape
-    (M, _) = Y.shape
-    diff = X[None, :, :] - Y[:, None, :]
-    err = diff ** 2
-    sigma2 = np.sum(err) / (D * M * N)
+    if not use_prev_sigma2 or sigma2_0 == 0:
+        (N, D) = X.shape
+        (M, _) = Y.shape
+        diff = X[None, :, :] - Y[:, None, :]
+        err = diff ** 2
+        sigma2 = np.sum(err) / (D * M * N)
+    else:
+        sigma2 = sigma2_0
 
     # get the LLE matrix
     L = calc_LLE_weights(k, Y_0)
@@ -214,42 +204,6 @@ def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol):
         den += c
 
         P = np.divide(P, den)
-        max_p_nodes = np.argmax(P, axis=0)
-
-        # this is gonna be slow
-        for col in range (0, len(X)):
-            if 0 <= max_p_nodes[col] < num_of_wires:
-                P[num_of_wires:2*num_of_wires, col] = 0
-            else:
-                P[0:num_of_wires, col] = 0
-
-        # potential_2nd_max_p_nodes_1 = max_p_nodes - 1
-        # potential_2nd_max_p_nodes_2 = max_p_nodes + 1
-        # potential_2nd_max_p_nodes_1 = np.where(potential_2nd_max_p_nodes_1 < 0, 1, potential_2nd_max_p_nodes_1)
-        # potential_2nd_max_p_nodes_2 = np.where(potential_2nd_max_p_nodes_2 > M-1, M-2, potential_2nd_max_p_nodes_2)
-        # potential_2nd_max_p_nodes_1_select = np.vstack((np.arange(0, N), potential_2nd_max_p_nodes_1)).T
-        # potential_2nd_max_p_nodes_2_select = np.vstack((np.arange(0, N), potential_2nd_max_p_nodes_2)).T
-        # potential_2nd_max_p_1 = P.T[tuple(map(tuple, potential_2nd_max_p_nodes_1_select.T))]
-        # potential_2nd_max_p_2 = P.T[tuple(map(tuple, potential_2nd_max_p_nodes_2_select.T))]
-        # next_max_p_nodes = np.where(potential_2nd_max_p_1 > potential_2nd_max_p_2, potential_2nd_max_p_nodes_1, potential_2nd_max_p_nodes_2)
-        # node_indices_diff = max_p_nodes - next_max_p_nodes
-        # max_node_smaller_index = np.arange(0, N)[node_indices_diff < 0]
-        # max_node_larger_index = np.arange(0, N)[node_indices_diff > 0]
-        # dis_to_max_p_nodes = np.sqrt(np.sum(np.square(Y[max_p_nodes]-X), axis=1))
-        # dis_to_2nd_largest_p_nodes = np.sqrt(np.sum(np.square(Y[next_max_p_nodes]-X), axis=1))
-        # geodesic_dists = np.zeros((M, N)).T
-
-        # for idx in max_node_smaller_index:
-        #     geodesic_dists[idx, 0:max_p_nodes[idx]+1] = converted_node_dis[max_p_nodes[idx], 0:max_p_nodes[idx]+1] + dis_to_max_p_nodes[idx]
-        #     geodesic_dists[idx, next_max_p_nodes[idx]:M] = converted_node_dis[next_max_p_nodes[idx], next_max_p_nodes[idx]:M] + dis_to_2nd_largest_p_nodes[idx]
-
-        # for idx in max_node_larger_index:
-        #     geodesic_dists[idx, 0:next_max_p_nodes[idx]+1] = converted_node_dis[next_max_p_nodes[idx], 0:next_max_p_nodes[idx]+1] + dis_to_2nd_largest_p_nodes[idx]
-        #     geodesic_dists[idx, max_p_nodes[idx]:M] = converted_node_dis[max_p_nodes[idx], max_p_nodes[idx]:M] + dis_to_max_p_nodes[idx]
-
-        # geodesic_dists = geodesic_dists.T
-        # P = np.exp(-np.square(geodesic_dists) / (2 * sigma2))
-
         Pt1 = np.sum(P, axis=0)
         P1 = np.sum(P, axis=1)
         Np = np.sum(P1)
@@ -275,7 +229,7 @@ def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol):
         else:
             Y = Y_0 + np.matmul(G, W)
 
-    return Y
+    return Y, sigma2
 
 def sort_pts(Y_0):
     diff = Y_0[:, None, :] - Y_0[None, :,  :]
@@ -420,12 +374,14 @@ init_nodes = []
 nodes = []
 # H = []
 cur_time = time.time()
+sigma2 = 0
 def callback (rgb, depth, pc):
     global saved
     global initialized
     global init_nodes
     global nodes
     global cur_time
+    global sigma2
 
     proj_matrix = np.array([[918.359130859375,              0.0, 645.8908081054688, 0.0], \
                             [             0.0, 916.265869140625,   354.02392578125, 0.0], \
@@ -486,9 +442,10 @@ def callback (rgb, depth, pc):
     # register nodes
     if not initialized:
         # try four wires
-        wire1_pc = filtered_pc[filtered_pc[:, 0] > 0.12]
-        wire2_pc = filtered_pc[(0.12 > filtered_pc[:, 0]) & (filtered_pc[:, 0] > 0)]
-        wire3_pc = filtered_pc[(-0.15 < filtered_pc[:, 0]) & (filtered_pc[:, 0] < 0)]
+        wire1_pc = filtered_pc[filtered_pc[:, 0] > 0.06]
+        wire2_pc = filtered_pc[(0.06 > filtered_pc[:, 0]) & (filtered_pc[:, 0] > -0.06)]
+        wire3_pc = filtered_pc[filtered_pc[:, 0] < -0.06]
+        # wire3_pc = filtered_pc[(-0.15 < filtered_pc[:, 0]) & (filtered_pc[:, 0] < 0)]
 
         print('filtered wire 1 shape = ', np.shape(wire1_pc))
         print('filtered wire 2 shape = ', np.shape(wire2_pc))
@@ -511,7 +468,18 @@ def callback (rgb, depth, pc):
 
     # cpd
     if initialized:
-        nodes = cpd_lle(X=filtered_pc, Y_0 = init_nodes, beta=2, alpha=1, k=6, gamma=3, mu=0.05, max_iter=30, tol=0.00001)
+        nodes, sigma2 = cpd_lle(X=filtered_pc, 
+                                Y_0 = init_nodes, 
+                                beta=2, 
+                                alpha=1, 
+                                k=6, 
+                                gamma=3, 
+                                mu=0.05, 
+                                max_iter=30, 
+                                tol=0.00001, 
+                                use_decoupling = True, 
+                                use_prev_sigma2 = True, 
+                                sigma2_0 = sigma2)
         init_nodes = nodes
 
         nodes_1 = nodes[0 : nodes_per_wire]
