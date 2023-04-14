@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import matplotlib.pyplot as plt
 import rospy
@@ -366,68 +366,70 @@ def rotation_matrix_from_vectors(vec1, vec2):
     rotation_matrix = np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s ** 2))
     return rotation_matrix
 
-def ndarray2MarkerArray (Y, marker_frame, node_color, line_color):
+def ndarray2MarkerArray (Y, marker_frame, node_colors, line_colors, num_of_wires, nodes_per_wire):
     results = MarkerArray()
-    for i in range (0, len(Y)):
-        cur_node_result = Marker()
-        cur_node_result.header.frame_id = marker_frame
-        cur_node_result.type = Marker.SPHERE
-        cur_node_result.action = Marker.ADD
-        cur_node_result.ns = "node_results" + str(i)
-        cur_node_result.id = i
 
-        cur_node_result.pose.position.x = Y[i, 0]
-        cur_node_result.pose.position.y = Y[i, 1]
-        cur_node_result.pose.position.z = Y[i, 2]
-        cur_node_result.pose.orientation.w = 1.0
-        cur_node_result.pose.orientation.x = 0.0
-        cur_node_result.pose.orientation.y = 0.0
-        cur_node_result.pose.orientation.z = 0.0
+    for i in range (0, num_of_wires):
+        for j in range (0, nodes_per_wire):
+            cur_node_result = Marker()
+            cur_node_result.header.frame_id = marker_frame
+            cur_node_result.type = Marker.SPHERE
+            cur_node_result.action = Marker.ADD
+            cur_node_result.ns = "node_results" + str(i*nodes_per_wire + j)
+            cur_node_result.id = i
 
-        cur_node_result.scale.x = 0.01
-        cur_node_result.scale.y = 0.01
-        cur_node_result.scale.z = 0.01
-        cur_node_result.color.r = node_color[0]
-        cur_node_result.color.g = node_color[1]
-        cur_node_result.color.b = node_color[2]
-        cur_node_result.color.a = node_color[3]
+            cur_node_result.pose.position.x = Y[i*nodes_per_wire + j, 0]
+            cur_node_result.pose.position.y = Y[i*nodes_per_wire + j, 1]
+            cur_node_result.pose.position.z = Y[i*nodes_per_wire + j, 2]
+            cur_node_result.pose.orientation.w = 1.0
+            cur_node_result.pose.orientation.x = 0.0
+            cur_node_result.pose.orientation.y = 0.0
+            cur_node_result.pose.orientation.z = 0.0
 
-        results.markers.append(cur_node_result)
+            cur_node_result.scale.x = 0.008
+            cur_node_result.scale.y = 0.008
+            cur_node_result.scale.z = 0.008
+            cur_node_result.color.r = node_colors[i, 0]
+            cur_node_result.color.g = node_colors[i, 1]
+            cur_node_result.color.b = node_colors[i, 2]
+            cur_node_result.color.a = node_colors[i, 3]
 
-        if i == len(Y)-1:
-            break
+            results.markers.append(cur_node_result)
 
-        cur_line_result = Marker()
-        cur_line_result.header.frame_id = marker_frame
-        cur_line_result.type = Marker.CYLINDER
-        cur_line_result.action = Marker.ADD
-        cur_line_result.ns = "line_results" + str(i)
-        cur_line_result.id = i
+            if j == nodes_per_wire-1:
+                break
 
-        cur_line_result.pose.position.x = ((Y[i] + Y[i+1])/2)[0]
-        cur_line_result.pose.position.y = ((Y[i] + Y[i+1])/2)[1]
-        cur_line_result.pose.position.z = ((Y[i] + Y[i+1])/2)[2]
+            cur_line_result = Marker()
+            cur_line_result.header.frame_id = marker_frame
+            cur_line_result.type = Marker.CYLINDER
+            cur_line_result.action = Marker.ADD
+            cur_line_result.ns = "line_results" + str(i*nodes_per_wire + j)
+            cur_line_result.id = i*nodes_per_wire + j
 
-        rot_matrix = rotation_matrix_from_vectors(np.array([0, 0, 1]), (Y[i+1]-Y[i])/pt2pt_dis(Y[i+1], Y[i])) 
-        r = R.from_matrix(rot_matrix)
-        x = r.as_quat()[0]
-        y = r.as_quat()[1]
-        z = r.as_quat()[2]
-        w = r.as_quat()[3]
+            cur_line_result.pose.position.x = ((Y[i*nodes_per_wire + j] + Y[i*nodes_per_wire + j + 1])/2)[0]
+            cur_line_result.pose.position.y = ((Y[i*nodes_per_wire + j] + Y[i*nodes_per_wire + j + 1])/2)[1]
+            cur_line_result.pose.position.z = ((Y[i*nodes_per_wire + j] + Y[i*nodes_per_wire + j + 1])/2)[2]
 
-        cur_line_result.pose.orientation.w = w
-        cur_line_result.pose.orientation.x = x
-        cur_line_result.pose.orientation.y = y
-        cur_line_result.pose.orientation.z = z
-        cur_line_result.scale.x = 0.005
-        cur_line_result.scale.y = 0.005
-        cur_line_result.scale.z = pt2pt_dis(Y[i], Y[i+1])
-        cur_line_result.color.r = line_color[0]
-        cur_line_result.color.g = line_color[1]
-        cur_line_result.color.b = line_color[2]
-        cur_line_result.color.a = line_color[3]
+            rot_matrix = rotation_matrix_from_vectors(np.array([0, 0, 1]), (Y[i*nodes_per_wire + j + 1]-Y[i*nodes_per_wire + j])/pt2pt_dis(Y[i*nodes_per_wire + j + 1], Y[i*nodes_per_wire + j])) 
+            r = R.from_matrix(rot_matrix)
+            x = r.as_quat()[0]
+            y = r.as_quat()[1]
+            z = r.as_quat()[2]
+            w = r.as_quat()[3]
 
-        results.markers.append(cur_line_result)
+            cur_line_result.pose.orientation.w = w
+            cur_line_result.pose.orientation.x = x
+            cur_line_result.pose.orientation.y = y
+            cur_line_result.pose.orientation.z = z
+            cur_line_result.scale.x = 0.004
+            cur_line_result.scale.y = 0.004
+            cur_line_result.scale.z = pt2pt_dis(Y[i*nodes_per_wire + j], Y[i*nodes_per_wire + j + 1])
+            cur_line_result.color.r = line_colors[i, 0]
+            cur_line_result.color.g = line_colors[i, 1]
+            cur_line_result.color.b = line_colors[i, 2]
+            cur_line_result.color.a = line_colors[i, 3]
+
+            results.markers.append(cur_line_result)
     
     return results
 
@@ -545,34 +547,9 @@ def callback (rgb, depth, pc):
                                 sigma2_0 = sigma2)
         init_nodes = nodes
 
-        nodes_1 = nodes[0 : nodes_per_wire]
-        nodes_2 = nodes[nodes_per_wire : (2*nodes_per_wire)]
-        nodes_3 = nodes[(2*nodes_per_wire) : (3*nodes_per_wire)]
-
-        # add color
-        nodes_1_rgba = struct.unpack('I', struct.pack('BBBB', 0, 0, 0, 255))[0]
-        nodes_1_rgba_arr = np.full((len(nodes_1), 1), nodes_1_rgba)
-        nodes_1_colored = np.hstack((nodes_1, nodes_1_rgba_arr)).astype('O')
-        nodes_1_colored[:, 3] = nodes_1_colored[:, 3].astype(int)
-        header.stamp = rospy.Time.now()
-        converted_nodes_1 = pcl2.create_cloud(header, fields, nodes_1_colored)
-        nodes_1_pub.publish(converted_nodes_1)
-        # add color
-        nodes_2_rgba = struct.unpack('I', struct.pack('BBBB', 255, 255, 255, 255))[0]
-        nodes_2_rgba_arr = np.full((len(nodes_2), 1), nodes_2_rgba)
-        nodes_2_colored = np.hstack((nodes_2, nodes_2_rgba_arr)).astype('O')
-        nodes_2_colored[:, 3] = nodes_2_colored[:, 3].astype(int)
-        header.stamp = rospy.Time.now()
-        converted_nodes_2 = pcl2.create_cloud(header, fields, nodes_2_colored)
-        nodes_2_pub.publish(converted_nodes_2)
-        # add color
-        nodes_3_rgba = struct.unpack('I', struct.pack('BBBB', 0, 0, 255, 255))[0]
-        nodes_3_rgba_arr = np.full((len(nodes_3), 1), nodes_3_rgba)
-        nodes_3_colored = np.hstack((nodes_3, nodes_3_rgba_arr)).astype('O')
-        nodes_3_colored[:, 3] = nodes_3_colored[:, 3].astype(int)
-        header.stamp = rospy.Time.now()
-        converted_nodes_3 = pcl2.create_cloud(header, fields, nodes_3_colored)
-        nodes_3_pub.publish(converted_nodes_3)
+        # nodes_1 = nodes[0 : nodes_per_wire]
+        # nodes_2 = nodes[nodes_per_wire : (2*nodes_per_wire)]
+        # nodes_3 = nodes[(2*nodes_per_wire) : (3*nodes_per_wire)]
 
         # project and pub image
         nodes_h = np.hstack((nodes, np.ones((len(nodes), 1))))
@@ -583,15 +560,16 @@ def callback (rgb, depth, pc):
 
         tracking_img = cur_image.copy()
         # print('nodes shape = ', np.shape(nodes))
+
+        node_colors = np.array([[255, 0, 0, 0.7], [255, 255, 0, 0.7], [0, 255, 0, 0.7]])
+        line_colors = node_colors.copy()
         
         for i in range (0, num_of_wires):
             # color
-            node_color = (0, 0, 0)
+            node_color = (255, 0, 0)
             if i == 1:
-                node_color = (255, 255, 255)
+                node_color = (255, 255, 0)
             elif i == 2:
-                node_color = (255, 0, 0)
-            elif i == 3:
                 node_color = (0, 255, 0)
             
             for index in range (i*nodes_per_wire, (i+1)*nodes_per_wire):
@@ -606,6 +584,9 @@ def callback (rgb, depth, pc):
         
         tracking_img_msg = ros_numpy.msgify(Image, tracking_img, 'rgb8')
         tracking_img_pub.publish(tracking_img_msg)
+
+        results = ndarray2MarkerArray(nodes, "camera_color_optical_frame", node_colors, line_colors, num_of_wires, nodes_per_wire)
+        results_pub.publish(results)
 
         print(time.time() - cur_time)
         cur_time = time.time()
@@ -627,12 +608,9 @@ if __name__=='__main__':
                 PointField('rgba', 12, PointField.UINT32, 1)]
     pc_pub = rospy.Publisher ('/pts', PointCloud2, queue_size=10)
 
-    nodes_1_pub = rospy.Publisher ('/nodes_1', PointCloud2, queue_size=10)
-    nodes_2_pub = rospy.Publisher ('/nodes_2', PointCloud2, queue_size=10)
-    nodes_3_pub = rospy.Publisher ('/nodes_3', PointCloud2, queue_size=10)
-
     tracking_img_pub = rospy.Publisher ('/tracking_img', Image, queue_size=10)
     mask_img_pub = rospy.Publisher('/mask', Image, queue_size=10)
+    results_pub = rospy.Publisher ('/results', MarkerArray, queue_size=10)
 
     ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub, pc_sub], 10)
     ts.registerCallback(callback)
