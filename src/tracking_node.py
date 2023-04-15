@@ -539,7 +539,7 @@ def callback (rgb, depth, pc):
     if initialized:
         nodes, sigma2 = cpd_lle(X=filtered_pc, 
                                 Y_0 = init_nodes, 
-                                beta=2, 
+                                beta=1, 
                                 alpha=1, 
                                 k=6, 
                                 gamma=3, 
@@ -554,6 +554,13 @@ def callback (rgb, depth, pc):
         # nodes_1 = nodes[0 : nodes_per_wire]
         # nodes_2 = nodes[nodes_per_wire : (2*nodes_per_wire)]
         # nodes_3 = nodes[(2*nodes_per_wire) : (3*nodes_per_wire)]
+
+
+        # # test slic
+        # segments = cv2.ximgproc.createSuperpixelSLIC(cur_image.copy(), algorithm = cv2.ximgproc.SLICO, region_size = 10)
+        # segments.iterate()
+        # seg_mask = segments.getLabelContourMask()
+        # cv2.imwrite("test.png", seg_mask)
 
         # project and pub image
 
