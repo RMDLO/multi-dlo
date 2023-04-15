@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import matplotlib.pyplot as plt
 import rospy
@@ -24,7 +24,7 @@ from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
 # temp
-nodes_per_wire = 15
+nodes_per_wire = 20
 num_of_wires = 3
 
 def pt2pt_dis_sq(pt1, pt2):
@@ -173,6 +173,25 @@ def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol, use_decoupling=Fa
         
     Y = Y_0.copy()
 
+    # set up converted node dis
+    converted_node_dis = []
+    seg_dis = np.sqrt(np.sum(np.square(np.diff(Y_0, axis=0)), axis=1))
+    converted_node_coord = []
+    last_pt = 0
+    converted_node_coord.append(last_pt)
+    for i in range (0, num_of_wires):
+        last_pt += i*10.0
+        for j in range (0, nodes_per_wire):
+            if i == 0 and j == 0:
+                continue
+            last_pt += seg_dis[i*nodes_per_wire+j-1]
+            converted_node_coord.append(last_pt)
+    converted_node_coord = np.array(converted_node_coord)
+    converted_node_dis = np.abs(converted_node_coord[None, :] - converted_node_coord[:, None])
+    # converted_node_dis_sq = np.square(converted_node_dis)
+    # print("len(converted_node_dis) = ", len(converted_node_dis))
+    # print(converted_node_dis)
+
     # initialize sigma2
     if not use_prev_sigma2 or sigma2_0 == 0:
         (N, D) = X.shape
@@ -182,6 +201,14 @@ def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol, use_decoupling=Fa
         sigma2 = np.sum(err) / (D * M * N)
     else:
         sigma2 = sigma2_0
+
+    # # TEMP TEST
+    # diff = np.full((M, M), 0.01)
+    # G = np.exp(-diff / (2 * beta**2))
+
+    # print("=== eigenvalues of G ===")
+    # print(np.linalg.eig(G)[0])
+    # print("========")
 
     # get the LLE matrix
     L = calc_LLE_weights(k, Y_0)
@@ -204,6 +231,46 @@ def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol, use_decoupling=Fa
         den += c
 
         P = np.divide(P, den)
+        max_p_nodes = np.argmax(P, axis=0)
+
+        if use_decoupling:
+            potential_2nd_max_p_nodes_1 = max_p_nodes - 1
+            potential_2nd_max_p_nodes_2 = max_p_nodes + 1
+            potential_2nd_max_p_nodes_1 = np.where(potential_2nd_max_p_nodes_1 < 0, 1, potential_2nd_max_p_nodes_1)
+            potential_2nd_max_p_nodes_2 = np.where(potential_2nd_max_p_nodes_2 > M-1, M-2, potential_2nd_max_p_nodes_2)
+            potential_2nd_max_p_nodes_1_select = np.vstack((np.arange(0, N), potential_2nd_max_p_nodes_1)).T
+            potential_2nd_max_p_nodes_2_select = np.vstack((np.arange(0, N), potential_2nd_max_p_nodes_2)).T
+            potential_2nd_max_p_1 = P.T[tuple(map(tuple, potential_2nd_max_p_nodes_1_select.T))]
+            potential_2nd_max_p_2 = P.T[tuple(map(tuple, potential_2nd_max_p_nodes_2_select.T))]
+            next_max_p_nodes = np.where(potential_2nd_max_p_1 > potential_2nd_max_p_2, potential_2nd_max_p_nodes_1, potential_2nd_max_p_nodes_2)
+            node_indices_diff = max_p_nodes - next_max_p_nodes
+            max_node_smaller_index = np.arange(0, N)[node_indices_diff < 0]
+            max_node_larger_index = np.arange(0, N)[node_indices_diff > 0]
+            dis_to_max_p_nodes = np.sqrt(np.sum(np.square(Y[max_p_nodes]-X), axis=1))
+            dis_to_2nd_largest_p_nodes = np.sqrt(np.sum(np.square(Y[next_max_p_nodes]-X), axis=1))
+            converted_P = np.zeros((M, N)).T
+
+            for idx in max_node_smaller_index:
+                converted_P[idx, 0:max_p_nodes[idx]+1] = converted_node_dis[max_p_nodes[idx], 0:max_p_nodes[idx]+1] + dis_to_max_p_nodes[idx]
+                converted_P[idx, next_max_p_nodes[idx]:M] = converted_node_dis[next_max_p_nodes[idx], next_max_p_nodes[idx]:M] + dis_to_2nd_largest_p_nodes[idx]
+
+            for idx in max_node_larger_index:
+                converted_P[idx, 0:next_max_p_nodes[idx]+1] = converted_node_dis[next_max_p_nodes[idx], 0:next_max_p_nodes[idx]+1] + dis_to_2nd_largest_p_nodes[idx]
+                converted_P[idx, max_p_nodes[idx]:M] = converted_node_dis[max_p_nodes[idx], max_p_nodes[idx]:M] + dis_to_max_p_nodes[idx]
+
+            converted_P = converted_P.T
+
+            P = np.exp(-np.square(converted_P) / (2 * sigma2))
+            den = np.sum(P, axis=0)
+            den = np.tile(den, (M, 1))
+            den[den == 0] = np.finfo(float).eps
+            c = (2 * np.pi * sigma2) ** (D / 2)
+            c = c * mu / (1 - mu)
+            c = c * M / N
+            den += c
+
+            P = np.divide(P, den)
+
         Pt1 = np.sum(P, axis=0)
         P1 = np.sum(P, axis=1)
         Np = np.sum(P1)
@@ -303,68 +370,70 @@ def rotation_matrix_from_vectors(vec1, vec2):
     rotation_matrix = np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s ** 2))
     return rotation_matrix
 
-def ndarray2MarkerArray (Y, marker_frame, node_color, line_color):
+def ndarray2MarkerArray (Y, marker_frame, node_colors, line_colors, num_of_wires, nodes_per_wire):
     results = MarkerArray()
-    for i in range (0, len(Y)):
-        cur_node_result = Marker()
-        cur_node_result.header.frame_id = marker_frame
-        cur_node_result.type = Marker.SPHERE
-        cur_node_result.action = Marker.ADD
-        cur_node_result.ns = "node_results" + str(i)
-        cur_node_result.id = i
 
-        cur_node_result.pose.position.x = Y[i, 0]
-        cur_node_result.pose.position.y = Y[i, 1]
-        cur_node_result.pose.position.z = Y[i, 2]
-        cur_node_result.pose.orientation.w = 1.0
-        cur_node_result.pose.orientation.x = 0.0
-        cur_node_result.pose.orientation.y = 0.0
-        cur_node_result.pose.orientation.z = 0.0
+    for i in range (0, num_of_wires):
+        for j in range (0, nodes_per_wire):
+            cur_node_result = Marker()
+            cur_node_result.header.frame_id = marker_frame
+            cur_node_result.type = Marker.SPHERE
+            cur_node_result.action = Marker.ADD
+            cur_node_result.ns = "node_results" + str(i*nodes_per_wire + j)
+            cur_node_result.id = i
 
-        cur_node_result.scale.x = 0.01
-        cur_node_result.scale.y = 0.01
-        cur_node_result.scale.z = 0.01
-        cur_node_result.color.r = node_color[0]
-        cur_node_result.color.g = node_color[1]
-        cur_node_result.color.b = node_color[2]
-        cur_node_result.color.a = node_color[3]
+            cur_node_result.pose.position.x = Y[i*nodes_per_wire + j, 0]
+            cur_node_result.pose.position.y = Y[i*nodes_per_wire + j, 1]
+            cur_node_result.pose.position.z = Y[i*nodes_per_wire + j, 2]
+            cur_node_result.pose.orientation.w = 1.0
+            cur_node_result.pose.orientation.x = 0.0
+            cur_node_result.pose.orientation.y = 0.0
+            cur_node_result.pose.orientation.z = 0.0
 
-        results.markers.append(cur_node_result)
+            cur_node_result.scale.x = 0.006
+            cur_node_result.scale.y = 0.006
+            cur_node_result.scale.z = 0.006
+            cur_node_result.color.r = node_colors[i, 0]
+            cur_node_result.color.g = node_colors[i, 1]
+            cur_node_result.color.b = node_colors[i, 2]
+            cur_node_result.color.a = node_colors[i, 3]
 
-        if i == len(Y)-1:
-            break
+            results.markers.append(cur_node_result)
 
-        cur_line_result = Marker()
-        cur_line_result.header.frame_id = marker_frame
-        cur_line_result.type = Marker.CYLINDER
-        cur_line_result.action = Marker.ADD
-        cur_line_result.ns = "line_results" + str(i)
-        cur_line_result.id = i
+            if j == nodes_per_wire-1:
+                break
 
-        cur_line_result.pose.position.x = ((Y[i] + Y[i+1])/2)[0]
-        cur_line_result.pose.position.y = ((Y[i] + Y[i+1])/2)[1]
-        cur_line_result.pose.position.z = ((Y[i] + Y[i+1])/2)[2]
+            cur_line_result = Marker()
+            cur_line_result.header.frame_id = marker_frame
+            cur_line_result.type = Marker.CYLINDER
+            cur_line_result.action = Marker.ADD
+            cur_line_result.ns = "line_results" + str(i*nodes_per_wire + j)
+            cur_line_result.id = i*nodes_per_wire + j
 
-        rot_matrix = rotation_matrix_from_vectors(np.array([0, 0, 1]), (Y[i+1]-Y[i])/pt2pt_dis(Y[i+1], Y[i])) 
-        r = R.from_matrix(rot_matrix)
-        x = r.as_quat()[0]
-        y = r.as_quat()[1]
-        z = r.as_quat()[2]
-        w = r.as_quat()[3]
+            cur_line_result.pose.position.x = ((Y[i*nodes_per_wire + j] + Y[i*nodes_per_wire + j + 1])/2)[0]
+            cur_line_result.pose.position.y = ((Y[i*nodes_per_wire + j] + Y[i*nodes_per_wire + j + 1])/2)[1]
+            cur_line_result.pose.position.z = ((Y[i*nodes_per_wire + j] + Y[i*nodes_per_wire + j + 1])/2)[2]
 
-        cur_line_result.pose.orientation.w = w
-        cur_line_result.pose.orientation.x = x
-        cur_line_result.pose.orientation.y = y
-        cur_line_result.pose.orientation.z = z
-        cur_line_result.scale.x = 0.005
-        cur_line_result.scale.y = 0.005
-        cur_line_result.scale.z = pt2pt_dis(Y[i], Y[i+1])
-        cur_line_result.color.r = line_color[0]
-        cur_line_result.color.g = line_color[1]
-        cur_line_result.color.b = line_color[2]
-        cur_line_result.color.a = line_color[3]
+            rot_matrix = rotation_matrix_from_vectors(np.array([0, 0, 1]), (Y[i*nodes_per_wire + j + 1]-Y[i*nodes_per_wire + j])/pt2pt_dis(Y[i*nodes_per_wire + j + 1], Y[i*nodes_per_wire + j])) 
+            r = R.from_matrix(rot_matrix)
+            x = r.as_quat()[0]
+            y = r.as_quat()[1]
+            z = r.as_quat()[2]
+            w = r.as_quat()[3]
 
-        results.markers.append(cur_line_result)
+            cur_line_result.pose.orientation.w = w
+            cur_line_result.pose.orientation.x = x
+            cur_line_result.pose.orientation.y = y
+            cur_line_result.pose.orientation.z = z
+            cur_line_result.scale.x = 0.004
+            cur_line_result.scale.y = 0.004
+            cur_line_result.scale.z = pt2pt_dis(Y[i*nodes_per_wire + j], Y[i*nodes_per_wire + j + 1])
+            cur_line_result.color.r = line_colors[i, 0]
+            cur_line_result.color.g = line_colors[i, 1]
+            cur_line_result.color.b = line_colors[i, 2]
+            cur_line_result.color.a = line_colors[i, 3]
+
+            results.markers.append(cur_line_result)
     
     return results
 
@@ -442,9 +511,9 @@ def callback (rgb, depth, pc):
     # register nodes
     if not initialized:
         # try four wires
-        wire1_pc = filtered_pc[filtered_pc[:, 0] > 0.06]
-        wire2_pc = filtered_pc[(0.06 > filtered_pc[:, 0]) & (filtered_pc[:, 0] > -0.06)]
-        wire3_pc = filtered_pc[filtered_pc[:, 0] < -0.06]
+        wire1_pc = filtered_pc[filtered_pc[:, 0] > 0.05]
+        wire2_pc = filtered_pc[(0.05 > filtered_pc[:, 0]) & (filtered_pc[:, 0] > 0.01)]
+        wire3_pc = filtered_pc[filtered_pc[:, 0] < 0.01]
         # wire3_pc = filtered_pc[(-0.15 < filtered_pc[:, 0]) & (filtered_pc[:, 0] < 0)]
 
         print('filtered wire 1 shape = ', np.shape(wire1_pc))
@@ -470,7 +539,7 @@ def callback (rgb, depth, pc):
     if initialized:
         nodes, sigma2 = cpd_lle(X=filtered_pc, 
                                 Y_0 = init_nodes, 
-                                beta=2, 
+                                beta=1, 
                                 alpha=1, 
                                 k=6, 
                                 gamma=3, 
@@ -482,36 +551,30 @@ def callback (rgb, depth, pc):
                                 sigma2_0 = sigma2)
         init_nodes = nodes
 
-        nodes_1 = nodes[0 : nodes_per_wire]
-        nodes_2 = nodes[nodes_per_wire : (2*nodes_per_wire)]
-        nodes_3 = nodes[(2*nodes_per_wire) : (3*nodes_per_wire)]
+        # nodes_1 = nodes[0 : nodes_per_wire]
+        # nodes_2 = nodes[nodes_per_wire : (2*nodes_per_wire)]
+        # nodes_3 = nodes[(2*nodes_per_wire) : (3*nodes_per_wire)]
 
-        # add color
-        nodes_1_rgba = struct.unpack('I', struct.pack('BBBB', 0, 0, 0, 255))[0]
-        nodes_1_rgba_arr = np.full((len(nodes_1), 1), nodes_1_rgba)
-        nodes_1_colored = np.hstack((nodes_1, nodes_1_rgba_arr)).astype('O')
-        nodes_1_colored[:, 3] = nodes_1_colored[:, 3].astype(int)
-        header.stamp = rospy.Time.now()
-        converted_nodes_1 = pcl2.create_cloud(header, fields, nodes_1_colored)
-        nodes_1_pub.publish(converted_nodes_1)
-        # add color
-        nodes_2_rgba = struct.unpack('I', struct.pack('BBBB', 255, 255, 255, 255))[0]
-        nodes_2_rgba_arr = np.full((len(nodes_2), 1), nodes_2_rgba)
-        nodes_2_colored = np.hstack((nodes_2, nodes_2_rgba_arr)).astype('O')
-        nodes_2_colored[:, 3] = nodes_2_colored[:, 3].astype(int)
-        header.stamp = rospy.Time.now()
-        converted_nodes_2 = pcl2.create_cloud(header, fields, nodes_2_colored)
-        nodes_2_pub.publish(converted_nodes_2)
-        # add color
-        nodes_3_rgba = struct.unpack('I', struct.pack('BBBB', 0, 0, 255, 255))[0]
-        nodes_3_rgba_arr = np.full((len(nodes_3), 1), nodes_3_rgba)
-        nodes_3_colored = np.hstack((nodes_3, nodes_3_rgba_arr)).astype('O')
-        nodes_3_colored[:, 3] = nodes_3_colored[:, 3].astype(int)
-        header.stamp = rospy.Time.now()
-        converted_nodes_3 = pcl2.create_cloud(header, fields, nodes_3_colored)
-        nodes_3_pub.publish(converted_nodes_3)
+
+        # # test slic
+        # segments = cv2.ximgproc.createSuperpixelSLIC(cur_image.copy(), algorithm = cv2.ximgproc.SLICO, region_size = 10)
+        # segments.iterate()
+        # seg_mask = segments.getLabelContourMask()
+        # cv2.imwrite("test.png", seg_mask)
 
         # project and pub image
+
+        # sort nodes and edges based on z values
+        # ordered from small -> large
+        adj_nodes_avg_z_values = np.zeros((len(nodes)-1, 2))  # [index, avg z value]
+        adj_nodes_avg_z_values[:, 0] = np.arange(0, len(nodes)-1, 1)
+        adj_nodes_avg_z_values[:, 1] = (nodes[0:len(nodes)-1, 2] + nodes[1:len(nodes), 2]) / 2.0
+        z_sorted_dix = np.argsort(adj_nodes_avg_z_values[:,-1].copy())
+
+        # we want to plot nodes and edges far away (larger z values) first
+        # reverse ind
+        z_sorted_dix = np.flip(z_sorted_dix)
+
         nodes_h = np.hstack((nodes, np.ones((len(nodes), 1))))
         # proj_matrix: 3*4; nodes_h.T: 4*M; result: 3*M
         image_coords = np.matmul(proj_matrix, nodes_h.T).T
@@ -520,29 +583,59 @@ def callback (rgb, depth, pc):
 
         tracking_img = cur_image.copy()
         # print('nodes shape = ', np.shape(nodes))
-        
-        for i in range (0, num_of_wires):
-            # color
-            node_color = (0, 0, 0)
-            if i == 1:
-                node_color = (255, 255, 255)
-            elif i == 2:
-                node_color = (255, 0, 0)
-            elif i == 3:
-                node_color = (0, 255, 0)
-            
-            for index in range (i*nodes_per_wire, (i+1)*nodes_per_wire):
-                # draw circle
-                uv = (us[index], vs[index])
-                cv2.circle(tracking_img, uv, 5, node_color, -1)
 
-                # draw line
-                # print(index, (i+1)*nodes_per_wire-1)
-                if index != (i+1)*nodes_per_wire-1:
-                    cv2.line(tracking_img, uv, (us[index+1], vs[index+1]), node_color, 2)
+        alpha = 1
+        node_colors = np.array([[255, 0, 0, alpha], [255, 255, 0, alpha], [0, 255, 0, alpha]])
+        line_colors = node_colors.copy()
+
+        for idx in z_sorted_dix:
+            # if this pair is not from the same dlo, skip
+            if int(idx / nodes_per_wire) != int((idx+1) / nodes_per_wire):
+                continue
+
+            # determine which dlo this is
+            dlo_idx = int(idx / nodes_per_wire)
+
+            # color
+            node_color = (255, 0, 0)
+            if dlo_idx == 1:
+                node_color = (255, 255, 0)
+            elif dlo_idx == 2:
+                node_color = (0, 255, 0)
+
+            # draw circle 1
+            uv_1 = (us[idx], vs[idx])
+            cv2.circle(tracking_img, uv_1, 5, node_color, -1)
+            # draw circle 2
+            uv_2 = (us[idx+1], vs[idx+1])
+            cv2.circle(tracking_img, uv_2, 5, node_color, -1)
+
+            # draw line
+            cv2.line(tracking_img, uv_1, uv_2, node_color, 3)
+        
+        # for i in range (0, num_of_wires):
+        #     # color
+        #     node_color = (255, 0, 0)
+        #     if i == 1:
+        #         node_color = (255, 255, 0)
+        #     elif i == 2:
+        #         node_color = (0, 255, 0)
+            
+        #     for index in range (i*nodes_per_wire, (i+1)*nodes_per_wire):
+        #         # draw circle
+        #         uv = (us[index], vs[index])
+        #         cv2.circle(tracking_img, uv, 5, node_color, -1)
+
+        #         # draw line
+        #         # print(index, (i+1)*nodes_per_wire-1)
+        #         if index != (i+1)*nodes_per_wire-1:
+        #             cv2.line(tracking_img, uv, (us[index+1], vs[index+1]), node_color, 2)
         
         tracking_img_msg = ros_numpy.msgify(Image, tracking_img, 'rgb8')
         tracking_img_pub.publish(tracking_img_msg)
+
+        results = ndarray2MarkerArray(nodes, "camera_color_optical_frame", node_colors, line_colors, num_of_wires, nodes_per_wire)
+        results_pub.publish(results)
 
         print(time.time() - cur_time)
         cur_time = time.time()
@@ -564,12 +657,9 @@ if __name__=='__main__':
                 PointField('rgba', 12, PointField.UINT32, 1)]
     pc_pub = rospy.Publisher ('/pts', PointCloud2, queue_size=10)
 
-    nodes_1_pub = rospy.Publisher ('/nodes_1', PointCloud2, queue_size=10)
-    nodes_2_pub = rospy.Publisher ('/nodes_2', PointCloud2, queue_size=10)
-    nodes_3_pub = rospy.Publisher ('/nodes_3', PointCloud2, queue_size=10)
-
     tracking_img_pub = rospy.Publisher ('/tracking_img', Image, queue_size=10)
     mask_img_pub = rospy.Publisher('/mask', Image, queue_size=10)
+    results_pub = rospy.Publisher ('/results', MarkerArray, queue_size=10)
 
     ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub, pc_sub], 10)
     ts.registerCallback(callback)
