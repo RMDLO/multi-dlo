@@ -202,8 +202,12 @@ def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol, use_decoupling=Fa
     else:
         sigma2 = sigma2_0
 
-    # print("=== sigma2 ===")
-    # print(sigma2)
+    # # TEMP TEST
+    # diff = np.full((M, M), 0.01)
+    # G = np.exp(-diff / (2 * beta**2))
+
+    # print("=== eigenvalues of G ===")
+    # print(np.linalg.eig(G)[0])
     # print("========")
 
     # get the LLE matrix
@@ -552,6 +556,18 @@ def callback (rgb, depth, pc):
         # nodes_3 = nodes[(2*nodes_per_wire) : (3*nodes_per_wire)]
 
         # project and pub image
+
+        # sort nodes and edges based on z values
+        # ordered from small -> large
+        adj_nodes_avg_z_values = np.zeros((len(nodes)-1, 2))  # [index, avg z value]
+        adj_nodes_avg_z_values[:, 0] = np.arange(0, len(nodes)-1, 1)
+        adj_nodes_avg_z_values[:, 1] = (nodes[0:len(nodes)-1, 2] + nodes[1:len(nodes), 2]) / 2.0
+        z_sorted_dix = np.argsort(adj_nodes_avg_z_values[:,-1].copy())
+
+        # we want to plot nodes and edges far away (larger z values) first
+        # reverse ind
+        z_sorted_dix = np.flip(z_sorted_dix)
+
         nodes_h = np.hstack((nodes, np.ones((len(nodes), 1))))
         # proj_matrix: 3*4; nodes_h.T: 4*M; result: 3*M
         image_coords = np.matmul(proj_matrix, nodes_h.T).T
@@ -564,24 +580,49 @@ def callback (rgb, depth, pc):
         alpha = 1
         node_colors = np.array([[255, 0, 0, alpha], [255, 255, 0, alpha], [0, 255, 0, alpha]])
         line_colors = node_colors.copy()
-        
-        for i in range (0, num_of_wires):
+
+        for idx in z_sorted_dix:
+            # if this pair is not from the same dlo, skip
+            if int(idx / nodes_per_wire) != int((idx+1) / nodes_per_wire):
+                continue
+
+            # determine which dlo this is
+            dlo_idx = int(idx / nodes_per_wire)
+
             # color
             node_color = (255, 0, 0)
-            if i == 1:
+            if dlo_idx == 1:
                 node_color = (255, 255, 0)
-            elif i == 2:
+            elif dlo_idx == 2:
                 node_color = (0, 255, 0)
-            
-            for index in range (i*nodes_per_wire, (i+1)*nodes_per_wire):
-                # draw circle
-                uv = (us[index], vs[index])
-                cv2.circle(tracking_img, uv, 5, node_color, -1)
 
-                # draw line
-                # print(index, (i+1)*nodes_per_wire-1)
-                if index != (i+1)*nodes_per_wire-1:
-                    cv2.line(tracking_img, uv, (us[index+1], vs[index+1]), node_color, 2)
+            # draw circle 1
+            uv_1 = (us[idx], vs[idx])
+            cv2.circle(tracking_img, uv_1, 5, node_color, -1)
+            # draw circle 2
+            uv_2 = (us[idx+1], vs[idx+1])
+            cv2.circle(tracking_img, uv_2, 5, node_color, -1)
+
+            # draw line
+            cv2.line(tracking_img, uv_1, uv_2, node_color, 3)
+        
+        # for i in range (0, num_of_wires):
+        #     # color
+        #     node_color = (255, 0, 0)
+        #     if i == 1:
+        #         node_color = (255, 255, 0)
+        #     elif i == 2:
+        #         node_color = (0, 255, 0)
+            
+        #     for index in range (i*nodes_per_wire, (i+1)*nodes_per_wire):
+        #         # draw circle
+        #         uv = (us[index], vs[index])
+        #         cv2.circle(tracking_img, uv, 5, node_color, -1)
+
+        #         # draw line
+        #         # print(index, (i+1)*nodes_per_wire-1)
+        #         if index != (i+1)*nodes_per_wire-1:
+        #             cv2.line(tracking_img, uv, (us[index+1], vs[index+1]), node_color, 2)
         
         tracking_img_msg = ros_numpy.msgify(Image, tracking_img, 'rgb8')
         tracking_img_pub.publish(tracking_img_msg)
