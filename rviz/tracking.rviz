@@ -7,7 +7,7 @@ Panels:
         - /Global Options1
         - /Status1
       Splitter Ratio: 0.5
-    Tree Height: 268
+    Tree Height: 789
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -37,7 +37,7 @@ Visualization Manager:
       Cell Size: 1
       Class: rviz/Grid
       Color: 160; 160; 164
-      Enabled: true
+      Enabled: false
       Line Style:
         Line Width: 0.029999999329447746
         Value: Lines
@@ -50,7 +50,7 @@ Visualization Manager:
       Plane: XY
       Plane Cell Count: 10
       Reference Frame: <Fixed Frame>
-      Value: true
+      Value: false
     - Class: rviz/Image
       Enabled: true
       Image Topic: /tracking_img
@@ -63,7 +63,7 @@ Visualization Manager:
       Transport Hint: raw
       Unreliable: false
       Value: true
-    - Alpha: 1
+    - Alpha: 0.25
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
         Max Value: 10
@@ -83,10 +83,10 @@ Visualization Manager:
       Position Transformer: XYZ
       Queue Size: 1
       Selectable: true
-      Size (Pixels): 1
+      Size (Pixels): 3
       Size (m): 0.009999999776482582
       Style: Points
-      Topic: /camera/depth/color/points
+      Topic: /pts
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -102,11 +102,11 @@ Visualization Manager:
         line_results11: true
         line_results12: true
         line_results13: true
+        line_results14: true
         line_results15: true
         line_results16: true
         line_results17: true
         line_results18: true
-        line_results19: true
         line_results2: true
         line_results20: true
         line_results21: true
@@ -117,6 +117,7 @@ Visualization Manager:
         line_results26: true
         line_results27: true
         line_results28: true
+        line_results29: true
         line_results3: true
         line_results30: true
         line_results31: true
@@ -127,13 +128,27 @@ Visualization Manager:
         line_results36: true
         line_results37: true
         line_results38: true
-        line_results39: true
         line_results4: true
         line_results40: true
         line_results41: true
         line_results42: true
         line_results43: true
+        line_results44: true
+        line_results45: true
+        line_results46: true
+        line_results47: true
+        line_results48: true
+        line_results49: true
         line_results5: true
+        line_results50: true
+        line_results51: true
+        line_results52: true
+        line_results53: true
+        line_results54: true
+        line_results55: true
+        line_results56: true
+        line_results57: true
+        line_results58: true
         line_results6: true
         line_results7: true
         line_results8: true
@@ -178,7 +193,22 @@ Visualization Manager:
         node_results42: true
         node_results43: true
         node_results44: true
+        node_results45: true
+        node_results46: true
+        node_results47: true
+        node_results48: true
+        node_results49: true
         node_results5: true
+        node_results50: true
+        node_results51: true
+        node_results52: true
+        node_results53: true
+        node_results54: true
+        node_results55: true
+        node_results56: true
+        node_results57: true
+        node_results58: true
+        node_results59: true
         node_results6: true
         node_results7: true
         node_results8: true
@@ -187,7 +217,7 @@ Visualization Manager:
       Value: true
   Enabled: true
   Global Options:
-    Background Color: 85; 87; 83
+    Background Color: 255; 255; 255
     Default Light: true
     Fixed Frame: base_link
     Frame Rate: 30
@@ -213,7 +243,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1.147193193435669
+      Distance: 0.549177348613739
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -221,27 +251,27 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.5199862122535706
-        Y: 0.04226652532815933
-        Z: -0.0012612605933099985
+        X: 0.40791183710098267
+        Y: 0.04832957312464714
+        Z: -0.043379951268434525
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.5697963237762451
+      Pitch: 1.5597963333129883
       Target Frame: <Fixed Frame>
-      Yaw: 3.150395154953003
+      Yaw: 3.1404356956481934
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 1016
+  Height: 2002
   Hide Left Dock: false
   Hide Right Dock: false
   Image:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000400000000000003420000033afc0200000009fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000b0fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003d00000149000000c900fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000000a0049006d006100670065010000018c000001eb0000001600ffffff000000010000010f0000035afc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003d0000035a000000a400fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000007380000005efc0100000002fb0000000800540069006d0065010000000000000738000003bc00fffffffb0000000800540069006d00650100000000000004500000000000000000000003f00000033a00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd000000040000000000000310000006ccfc0200000009fb0000001200530065006c0065006300740069006f006e00000001e10000009b000000b000fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000b0fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000006e000003830000018200fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000000a0049006d00610067006501000003fd0000033d0000002600ffffff000000010000010f0000035afc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003d0000035a0000013200fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e1000001970000000300000cc00000005efc0100000002fb0000000800540069006d0065010000000000000cc0000006dc00fffffffb0000000800540069006d00650100000000000004500000000000000000000009a4000006cc00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:
@@ -250,6 +280,6 @@ Window Geometry:
     collapsed: false
   Views:
     collapsed: false
-  Width: 1848
-  X: 72
-  Y: 27
+  Width: 3264
+  X: 144
+  Y: 54
