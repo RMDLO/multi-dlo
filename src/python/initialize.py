@@ -5,18 +5,25 @@ import ros_numpy
 from sensor_msgs.msg import PointCloud2, PointField, Image, CameraInfo
 import sensor_msgs.point_cloud2 as pcl2
 import std_msgs.msg
-import message_filters
 
 import struct
 import time
 import cv2
 import numpy as np
 import time
+import os
+import sys
 
-from visualization_msgs.msg import MarkerArray
+import message_filters
+import open3d as o3d
+from scipy.spatial.transform import Rotation as R
 from scipy import interpolate
 
-from utils import extract_connected_skeleton, ndarray2MarkerArray
+import sensor_msgs.point_cloud2 as pcl2
+from visualization_msgs.msg import Marker
+from visualization_msgs.msg import MarkerArray
+
+from utils import ndarray2MarkerArray, register, sort_pts, indices_arr_pixel_coord
 
 proj_matrix = None
 def camera_info_callback (info):
@@ -69,57 +76,134 @@ def callback (rgb, depth):
         mask = color_thresholding(hsv_image, cur_depth)
 
     start_time = time.time()
+    mask_binary = mask.copy()
     mask = cv2.cvtColor(mask.copy(), cv2.COLOR_GRAY2BGR)
 
-    # returns the pixel coord of points (in order). a list of lists
-    img_scale = 1
-    extracted_chains = extract_connected_skeleton(visualize_initialization_process, mask, img_scale=img_scale, seg_length=8, max_curvature=25)
+    # get cur_pc from depth
+    all_pixel_coords = indices_arr_pixel_coord(cur_depth.shape[0], cur_depth.shape[1])
+    all_pixel_coords = all_pixel_coords.reshape(cur_depth.shape[0] * cur_depth.shape[1], 2)
 
-    all_pixel_coords = []
-    for chain in extracted_chains:
-        all_pixel_coords += chain
-    print('Finished extracting chains. Time taken:', time.time()-start_time)
+    pc_z = cur_depth / 1000.0
+    pc_z = pc_z.reshape(cur_depth.shape[0] * cur_depth.shape[1],)
 
-    all_pixel_coords = np.array(all_pixel_coords) * img_scale
-    all_pixel_coords = np.flip(all_pixel_coords, 1)
-
-    pc_z = cur_depth[tuple(map(tuple, all_pixel_coords.T))] / 1000.0
     f = proj_matrix[0, 0]
     cx = proj_matrix[0, 2]
     cy = proj_matrix[1, 2]
-    pixel_x = all_pixel_coords[:, 1]
-    pixel_y = all_pixel_coords[:, 0]
+    pixel_x = all_pixel_coords[:, 0]
+    pixel_y = all_pixel_coords[:, 1]
 
     pc_x = (pixel_x - cx) * pc_z / f
     pc_y = (pixel_y - cy) * pc_z / f
-    extracted_chains_3d = np.vstack((pc_x, pc_y))
-    extracted_chains_3d = np.vstack((extracted_chains_3d, pc_z))
-    extracted_chains_3d = extracted_chains_3d.T
+    cur_pc = np.vstack((pc_x, pc_y))
+    cur_pc = np.vstack((cur_pc, pc_z))
+    cur_pc = cur_pc.T
+    cur_pc = cur_pc.reshape(cur_depth.shape[0], cur_depth.shape[1], 3)
 
-    # do not include those without depth values
-    extracted_chains_3d = extracted_chains_3d[((extracted_chains_3d[:, 0] != 0) | (extracted_chains_3d[:, 1] != 0) | (extracted_chains_3d[:, 2] != 0))]
+    # for each object segment
+    num_of_dlos = 0
+    init_nodes_collection = []
 
-    if multi_color_dlo:
-        depth_threshold = 0.58  # m
-        extracted_chains_3d = extracted_chains_3d[extracted_chains_3d[:, 2] > depth_threshold]
+    if use_first_frame_masks == False:
+        # separate dlos (assume not entangled)
+        gray = mask_binary.copy()
+        contours, _ = cv2.findContours(gray, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        new_frame = np.zeros(gray.shape, np.uint8)
 
-    # tck, u = interpolate.splprep(extracted_chains_3d.T, s=0.001)
-    tck, u = interpolate.splprep(extracted_chains_3d.T, s=0.0005)
-    # 1st fit, less points
-    u_fine = np.linspace(0, 1, 300) # <-- num fit points
-    x_fine, y_fine, z_fine = interpolate.splev(u_fine, tck)
-    spline_pts = np.vstack((x_fine, y_fine, z_fine)).T
+        for a, contour in enumerate(contours):
+            c_area = cv2.contourArea(contour)
 
-    # 2nd fit, higher accuracy
-    num_true_pts = int(np.sum(np.sqrt(np.sum(np.square(np.diff(spline_pts, axis=0)), axis=1))) * 1000)
-    u_fine = np.linspace(0, 1, num_true_pts) # <-- num true points
-    x_fine, y_fine, z_fine = interpolate.splev(u_fine, tck)
-    spline_pts = np.vstack((x_fine, y_fine, z_fine)).T
-    total_spline_len = np.sum(np.sqrt(np.sum(np.square(np.diff(spline_pts, axis=0)), axis=1)))
+            if 1000 <= c_area:
+                num_of_dlos += 1
 
-    init_nodes = spline_pts[np.linspace(0, num_true_pts-1, num_of_nodes).astype(int)]
+                m = np.zeros(gray.shape, np.uint8)
+                m = cv2.drawContours(m, [contour], -1, 255, cv2.FILLED)
+                new_mask = cv2.bitwise_and(gray, m)
+                pt_frame = cv2.bitwise_or(new_frame, new_mask)
+                points = cv2.findNonZero(pt_frame)
 
-    results = ndarray2MarkerArray(init_nodes, result_frame_id, [1, 150/255, 0, 0.75], [0, 1, 0, 0.75])
+                cur_mask = cv2.cvtColor(pt_frame.copy(), cv2.COLOR_GRAY2BGR)
+                cur_mask = (cur_mask/255).astype(int)
+                filtered_pc = cur_pc * cur_mask
+                filtered_pc = filtered_pc[((filtered_pc[:, :, 0] != 0) | (filtered_pc[:, :, 1] != 0) | (filtered_pc[:, :, 2] != 0))]
+                filtered_pc = filtered_pc[filtered_pc[:, 2] > 0.2]
+
+                # downsample with open3d
+                pcd = o3d.geometry.PointCloud()
+                pcd.points = o3d.utility.Vector3dVector(filtered_pc)
+                downpcd = pcd.voxel_down_sample(voxel_size=0.007)
+                filtered_pc = np.asarray(downpcd.points)
+                print('filtered dlo {} pc = {}'.format(num_of_dlos, filtered_pc.shape))
+
+                init_nodes, sigma2 = register(filtered_pc, nodes_per_dlo, mu=0, max_iter=50)
+                init_nodes = np.array(sort_pts(init_nodes))
+                
+                tck, u = interpolate.splprep(init_nodes.T, s=0.0001)
+                # 1st fit, less points
+                u_fine = np.linspace(0, 1, 100) # <-- num fit points
+                x_fine, y_fine, z_fine = interpolate.splev(u_fine, tck)
+                spline_pts = np.vstack((x_fine, y_fine, z_fine)).T
+
+                # 2nd fit, higher accuracy
+                num_true_pts = int(np.sum(np.sqrt(np.sum(np.square(np.diff(spline_pts, axis=0)), axis=1))) * 1000)
+                u_fine = np.linspace(0, 1, num_true_pts) # <-- num true points
+                x_fine, y_fine, z_fine = interpolate.splev(u_fine, tck)
+                spline_pts = np.vstack((x_fine, y_fine, z_fine)).T
+                total_spline_len = np.sum(np.sqrt(np.sum(np.square(np.diff(spline_pts, axis=0)), axis=1)))
+
+                init_nodes = spline_pts[np.linspace(0, num_true_pts-1, nodes_per_dlo).astype(int)]
+                init_nodes_collection.append(init_nodes)
+
+                edges = np.empty((nodes_per_dlo-1, 2), dtype=np.uint32)
+                edges[:, 0] = range((num_of_dlos-1)*nodes_per_dlo, num_of_dlos*nodes_per_dlo - 1)
+                edges[:, 1] = range((num_of_dlos-1)*nodes_per_dlo + 1, num_of_dlos*nodes_per_dlo)
+    else:
+        all_mask_imgs = os.listdir(os.path.dirname(os.path.abspath(__file__)) + '/segmentation/first_frame_segmentations/' + folder_name)
+        for mask_img in all_mask_imgs:
+            num_of_dlos += 1
+
+            cur_mask = cv2.imread(os.path.dirname(os.path.abspath(__file__)) + '/segmentation/first_frame_segmentations/' + folder_name + '/' + mask_img)
+            cur_mask = (cur_mask/255).astype(int)
+            filtered_pc = cur_pc * cur_mask
+            filtered_pc = filtered_pc[((filtered_pc[:, :, 0] != 0) | (filtered_pc[:, :, 1] != 0) | (filtered_pc[:, :, 2] != 0))]
+            filtered_pc = filtered_pc[filtered_pc[:, 2] > 0.2]
+
+            # downsample with open3d
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(filtered_pc)
+            downpcd = pcd.voxel_down_sample(voxel_size=0.005)
+            filtered_pc = np.asarray(downpcd.points)
+            print('filtered dlo {} pc = {}'.format(num_of_dlos, filtered_pc.shape))
+
+            init_nodes, sigma2 = register(filtered_pc, nodes_per_dlo, mu=0, max_iter=300)
+            init_nodes = np.array(sort_pts(init_nodes))
+
+            tck, u = interpolate.splprep(init_nodes.T, s=0.0001)
+            # 1st fit, less points
+            u_fine = np.linspace(0, 1, 50) # <-- num fit points
+            x_fine, y_fine, z_fine = interpolate.splev(u_fine, tck)
+            spline_pts = np.vstack((x_fine, y_fine, z_fine)).T
+
+            # 2nd fit, higher accuracy
+            num_true_pts = int(np.sum(np.sqrt(np.sum(np.square(np.diff(spline_pts, axis=0)), axis=1))) * 1000)
+            u_fine = np.linspace(0, 1, num_true_pts) # <-- num true points
+            x_fine, y_fine, z_fine = interpolate.splev(u_fine, tck)
+            spline_pts = np.vstack((x_fine, y_fine, z_fine)).T
+            total_spline_len = np.sum(np.sqrt(np.sum(np.square(np.diff(spline_pts, axis=0)), axis=1)))
+
+            init_nodes = spline_pts[np.linspace(0, num_true_pts-1, nodes_per_dlo).astype(int)]
+            init_nodes_collection.append(init_nodes)
+
+            edges = np.empty((nodes_per_dlo-1, 2), dtype=np.uint32)
+            edges[:, 0] = range((num_of_dlos-1)*nodes_per_dlo, num_of_dlos*nodes_per_dlo - 1)
+            edges[:, 1] = range((num_of_dlos-1)*nodes_per_dlo + 1, num_of_dlos*nodes_per_dlo)
+
+    init_nodes = np.vstack(init_nodes_collection)
+
+    alpha = 1
+    node_colors = np.array([[255, 0, 0, alpha], [255, 255, 0, alpha], [0, 255, 0, alpha]])
+    line_colors = node_colors.copy()
+
+    results = ndarray2MarkerArray(init_nodes, result_frame_id, node_colors, line_colors, num_of_dlos, nodes_per_dlo)
     results_pub.publish(results)
 
     # add color
@@ -137,7 +221,10 @@ def callback (rgb, depth):
 if __name__=='__main__':
     rospy.init_node('init_tracker', anonymous=True)
 
-    num_of_nodes = rospy.get_param('/init_tracker/num_of_nodes')
+    nodes_per_dlo = rospy.get_param('/init_tracker/nodes_per_dlo')
+    use_first_frame_masks = rospy.get_param('/init_tracker/use_first_frame_masks')
+    folder_name = rospy.get_param('/init_tracker/folder_name')
+
     multi_color_dlo = rospy.get_param('/init_tracker/multi_color_dlo')
     camera_info_topic = rospy.get_param('/init_tracker/camera_info_topic')
     rgb_topic = rospy.get_param('/init_tracker/rgb_topic')
@@ -165,8 +252,8 @@ if __name__=='__main__':
                 PointField('y', 4, PointField.FLOAT32, 1),
                 PointField('z', 8, PointField.FLOAT32, 1),
                 PointField('rgba', 12, PointField.UINT32, 1)]
-    pc_pub = rospy.Publisher ('/trackdlo/init_nodes', PointCloud2, queue_size=10)
-    results_pub = rospy.Publisher ('/trackdlo/init_nodes_markers', MarkerArray, queue_size=10)
+    pc_pub = rospy.Publisher ('/init_nodes', PointCloud2, queue_size=10)
+    results_pub = rospy.Publisher ('/init_nodes_markers', MarkerArray, queue_size=10)
 
     ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub], 10)
     ts.registerCallback(callback)

@@ -486,7 +486,6 @@ def callback (rgb, depth, pc):
         # for each object segment
         num_of_dlos = 0
         init_nodes_collection = []
-        edges_collection = []
 
         if use_first_frame_masks.lower() == 'false':
             # separate dlos (assume not entangled)
@@ -541,7 +540,6 @@ def callback (rgb, depth, pc):
                     edges = np.empty((nodes_per_dlo-1, 2), dtype=np.uint32)
                     edges[:, 0] = range((num_of_dlos-1)*nodes_per_dlo, num_of_dlos*nodes_per_dlo - 1)
                     edges[:, 1] = range((num_of_dlos-1)*nodes_per_dlo + 1, num_of_dlos*nodes_per_dlo)
-                    edges_collection.append(edges)
         else:
             all_mask_imgs = os.listdir(os.path.dirname(os.path.abspath(__file__)) + '/segmentation/first_frame_segmentations/' + folder_name)
             for mask_img in all_mask_imgs:
@@ -582,10 +580,8 @@ def callback (rgb, depth, pc):
                 edges = np.empty((nodes_per_dlo-1, 2), dtype=np.uint32)
                 edges[:, 0] = range((num_of_dlos-1)*nodes_per_dlo, num_of_dlos*nodes_per_dlo - 1)
                 edges[:, 1] = range((num_of_dlos-1)*nodes_per_dlo + 1, num_of_dlos*nodes_per_dlo)
-                edges_collection.append(edges)
 
         init_nodes = np.vstack(init_nodes_collection)
-        edges_collection = np.vstack(edges_collection)
         initialized = True
 
     # continuous tracking
