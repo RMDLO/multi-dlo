@@ -24,6 +24,7 @@ from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
 from cdcpd_optimizer import DistanceConstrainedOptimizer
+from utils import post_processing
 
 nodes_per_dlo = 20
 num_of_dlos = 0
@@ -629,6 +630,8 @@ def callback (rgb, depth, pc):
         # optimization_result = optimizer.run(nodes)
         # nodes = optimization_result.astype(nodes.dtype)
 
+        nodes = post_processing(nodes, init_nodes, 0.005, num_of_dlos, nodes_per_dlo)
+
         init_nodes = nodes.copy()
 
         alpha = 1
@@ -686,7 +689,7 @@ def callback (rgb, depth, pc):
 
         header.stamp = rospy.Time.now()
         # converted_points = pcl2.create_cloud(header, fields, filtered_pc_colored)
-        pc_pub.publish(pc)
+        # pc_pub.publish(pc)
         
         tracking_img_msg = ros_numpy.msgify(Image, tracking_img, 'rgb8')
         tracking_img_pub.publish(tracking_img_msg)
