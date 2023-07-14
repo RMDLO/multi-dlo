@@ -5,9 +5,9 @@ using Eigen::MatrixXd;
 using Eigen::RowVectorXd;
 using cv::Mat;
 
-trackdlo::trackdlo () {}
+tracker::tracker () {}
 
-trackdlo::trackdlo(int num_of_nodes) {
+tracker::tracker(int num_of_nodes) {
     // default initialize
     Y_ = MatrixXd::Zero(num_of_nodes, 3);
     guide_nodes_ = Y_.replicate(1, 1);
@@ -29,20 +29,20 @@ trackdlo::trackdlo(int num_of_nodes) {
     visibility_threshold_ = 0.02;
 }
 
-trackdlo::trackdlo(int num_of_nodes,
-                    double visibility_threshold,
-                    double beta,
-                    double lambda,
-                    double alpha,
-                    double lle_weight,
-                    double k_vis,
-                    double mu,
-                    int max_iter,
-                    double tol,
-                    bool include_lle,
-                    bool use_geodesic,
-                    bool use_prev_sigma2,
-                    int kernel) 
+tracker::tracker(int num_of_nodes,
+                 double visibility_threshold,
+                 double beta,
+                 double lambda,
+                 double alpha,
+                 double lle_weight,
+                 double k_vis,
+                 double mu,
+                 int max_iter,
+                 double tol,
+                 bool include_lle,
+                 bool use_geodesic,
+                 bool use_prev_sigma2,
+                 int kernel) 
 {
     Y_ = MatrixXd::Zero(num_of_nodes, 3);
     visibility_threshold_ = visibility_threshold;
@@ -64,38 +64,38 @@ trackdlo::trackdlo(int num_of_nodes,
     correspondence_priors_ = {};
 }
 
-double trackdlo::get_sigma2 () {
+double tracker::get_sigma2 () {
     return sigma2_;
 }
 
-MatrixXd trackdlo::get_tracking_result () {
+MatrixXd tracker::get_tracking_result () {
     return Y_;
 }
 
-MatrixXd trackdlo::get_guide_nodes () {
+MatrixXd tracker::get_guide_nodes () {
     return guide_nodes_;
 }
 
-std::vector<MatrixXd> trackdlo::get_correspondence_pairs () {
+std::vector<MatrixXd> tracker::get_correspondence_pairs () {
     return correspondence_priors_;
 }
 
-void trackdlo::initialize_geodesic_coord (std::vector<double> geodesic_coord) {
+void tracker::initialize_geodesic_coord (std::vector<double> geodesic_coord) {
     for (int i = 0; i < geodesic_coord.size(); i ++) {
         geodesic_coord_.push_back(geodesic_coord[i]);
     }
 }
 
-void trackdlo::initialize_nodes (MatrixXd Y_init) {
+void tracker::initialize_nodes (MatrixXd Y_init) {
     Y_ = Y_init.replicate(1, 1);
     guide_nodes_ = Y_init.replicate(1, 1);
 }
 
-void trackdlo::set_sigma2 (double sigma2) {
+void tracker::set_sigma2 (double sigma2) {
     sigma2_ = sigma2;
 }
 
-std::vector<int> trackdlo::get_nearest_indices (int k, int M, int idx) {
+std::vector<int> tracker::get_nearest_indices (int k, int M, int idx) {
     std::vector<int> indices_arr;
     if (idx - k < 0) {
         for (int i = 0; i <= idx + k; i ++) {
@@ -122,7 +122,7 @@ std::vector<int> trackdlo::get_nearest_indices (int k, int M, int idx) {
     return indices_arr;
 }
 
-MatrixXd trackdlo::calc_LLE_weights (int k, MatrixXd X) {
+MatrixXd tracker::calc_LLE_weights (int k, MatrixXd X) {
     MatrixXd W = MatrixXd::Zero(X.rows(), X.rows());
     for (int i = 0; i < X.rows(); i ++) {
         std::vector<int> indices = get_nearest_indices(static_cast<int>(k/2), X.rows(), i);
@@ -164,25 +164,27 @@ MatrixXd trackdlo::calc_LLE_weights (int k, MatrixXd X) {
     return W;
 }
 
-bool trackdlo::cpd_lle (MatrixXd X,
-                        MatrixXd& Y,
-                        double& sigma2,
-                        double beta,
-                        double lambda,
-                        double lle_weight,
-                        double mu,
-                        int max_iter,
-                        double tol,
-                        bool include_lle,
-                        bool use_geodesic,
-                        bool use_prev_sigma2,
-                        bool use_ecpd,
-                        std::vector<MatrixXd> correspondence_priors,
-                        double alpha,
-                        int kernel,
-                        std::vector<int> visible_nodes,
-                        double k_vis,
-                        double visibility_threshold) 
+bool tracker::cpd_lle (MatrixXd X,
+                       MatrixXd& Y,
+                       double& sigma2,
+                       double beta,
+                       double lambda,
+                       double lle_weight,
+                       double mu,
+                       int max_iter,
+                       double tol,
+                       bool include_lle,
+                       bool use_geodesic,
+                       bool use_prev_sigma2,
+                       int num_of_dlos,
+                       int nodes_per_dlo,
+                       bool use_ecpd,
+                       std::vector<MatrixXd> correspondence_priors,
+                       double alpha,
+                       int kernel,
+                       std::vector<int> visible_nodes,
+                       double k_vis,
+                       double visibility_threshold) 
 {
 
     bool converged = true;
@@ -259,6 +261,19 @@ bool trackdlo::cpd_lle (MatrixXd X,
         else { // default to gaussian
             G = (-converted_node_dis_sq / (2 * beta * beta)).array().exp();
         }
+    }
+
+    // tracking multiple dlos
+    if (use_geodesic && num_of_dlos > 1) {
+        MatrixXd G_new = MatrixXd::Zero(M, M);
+        for (int i = 0; i < num_of_dlos; i ++) {
+            int start = i * nodes_per_dlo;
+            int end = (i+1) * nodes_per_dlo;
+            for (int idx = start; idx < end; idx ++) {
+                G_new(idx, idx) = G(idx, idx);
+            }
+        }
+        G = G_new.replicate(1, 1);
     }
 
     // get the LLE matrix
@@ -482,7 +497,7 @@ bool trackdlo::cpd_lle (MatrixXd X,
 }
 
 // alignment: 0 --> align with head; 1 --> align with tail
-std::vector<MatrixXd> trackdlo::traverse_geodesic (std::vector<double> geodesic_coord, const MatrixXd guide_nodes, const std::vector<int> visible_nodes, int alignment) {
+std::vector<MatrixXd> tracker::traverse_geodesic (std::vector<double> geodesic_coord, const MatrixXd guide_nodes, const std::vector<int> visible_nodes, int alignment) {
     std::vector<MatrixXd> node_pairs = {};
 
     // extreme cases: only one guide node available
@@ -622,7 +637,7 @@ std::vector<MatrixXd> trackdlo::traverse_geodesic (std::vector<double> geodesic_
     return node_pairs;
 }
 
-std::vector<MatrixXd> trackdlo::traverse_euclidean (std::vector<double> geodesic_coord, const MatrixXd guide_nodes, const std::vector<int> visible_nodes, int alignment, int alignment_node_idx) {
+std::vector<MatrixXd> tracker::traverse_euclidean (std::vector<double> geodesic_coord, const MatrixXd guide_nodes, const std::vector<int> visible_nodes, int alignment, int alignment_node_idx) {
     std::vector<MatrixXd> node_pairs = {};
 
     // extreme cases: only one guide node available
@@ -938,105 +953,11 @@ std::vector<MatrixXd> trackdlo::traverse_euclidean (std::vector<double> geodesic
     return node_pairs;
 }
 
-void trackdlo::tracking_step (MatrixXd X, 
-                              std::vector<int> visible_nodes, 
-                              std::vector<int> visible_nodes_extended, 
-                              MatrixXd proj_matrix, 
-                              int img_rows, 
-                              int img_cols) {
-    
-    // variable initialization
-    correspondence_priors_ = {};
-    int state = 0;
-
-    // copy visible nodes vec to guide nodes
-    // not using topRows() because it caused weird bugs
-    guide_nodes_ = MatrixXd::Zero(visible_nodes_extended.size(), 3);
-    if (visible_nodes_extended.size() != Y_.rows()) {
-        for (int i = 0; i < visible_nodes_extended.size(); i ++) {
-            guide_nodes_.row(i) = Y_.row(visible_nodes_extended[i]);
-        }
-    }
-    else {
-        guide_nodes_ = Y_.replicate(1, 1);
-    }
-
-    // determine DLO state: heading visible, tail visible, both visible, or both occluded
-    // priors_vec should be the final output; priors_vec[i] = {index, x, y, z}
-    double sigma2_pre_proc = sigma2_;
-    cpd_lle(X, guide_nodes_, sigma2_pre_proc, 3, 1, lle_weight_, mu_, 50, tol_, true, true, true, false, {}, 0, 1);
-    // cpd_lle(X, guide_nodes_, sigma2_pre_proc, 1, 1, 1, mu_, 50, tol_, true, true, true);
-
-    if (visible_nodes_extended.size() == Y_.rows()) {
-        if (visible_nodes.size() == visible_nodes_extended.size()) {
-            ROS_INFO("All nodes visible");
-        }
-        else {
-            ROS_INFO("Minor occlusion");
-        }
-
-        // get priors vec
-        std::vector<MatrixXd> priors_vec_1 = traverse_euclidean(geodesic_coord_, guide_nodes_, visible_nodes_extended, 0);
-        std::vector<MatrixXd> priors_vec_2 = traverse_euclidean(geodesic_coord_, guide_nodes_, visible_nodes_extended, 1);
-        // std::vector<MatrixXd> priors_vec_1 = traverse_geodesic(geodesic_coord, guide_nodes, visible_nodes, 0);
-        // std::vector<MatrixXd> priors_vec_2 = traverse_geodesic(geodesic_coord, guide_nodes, visible_nodes, 1);
-
-        // priors vec 2 goes from last index -> first index
-        std::reverse(priors_vec_2.begin(), priors_vec_2.end());
-
-        // take average
-        correspondence_priors_ = {};
-        for (int i = 0; i < Y_.rows(); i ++) {
-            if (i < priors_vec_2[0](0, 0) && i < priors_vec_1.size()) {
-                correspondence_priors_.push_back(priors_vec_1[i]);
-            }
-            else if (i > priors_vec_1[priors_vec_1.size()-1](0, 0) && (i-(Y_.rows()-priors_vec_2.size())) < priors_vec_2.size()) {
-                correspondence_priors_.push_back(priors_vec_2[i-(Y_.rows()-priors_vec_2.size())]);
-            }
-            else {
-                correspondence_priors_.push_back((priors_vec_1[i] + priors_vec_2[i-(Y_.rows()-priors_vec_2.size())]) / 2.0);
-            }
-        }
-    }
-    else if (visible_nodes_extended[0] == 0 && visible_nodes_extended[visible_nodes_extended.size()-1] == Y_.rows()-1) {
-        ROS_INFO("Mid-section occluded");
-
-        correspondence_priors_ = traverse_euclidean(geodesic_coord_, guide_nodes_, visible_nodes_extended, 0);
-        std::vector<MatrixXd> priors_vec_2 = traverse_euclidean(geodesic_coord_, guide_nodes_, visible_nodes_extended, 1);
-        // priors_vec = traverse_geodesic(geodesic_coord, guide_nodes, visible_nodes, 0);
-        // std::vector<MatrixXd> priors_vec_2 = traverse_geodesic(geodesic_coord, guide_nodes, visible_nodes, 1);
-
-        correspondence_priors_.insert(correspondence_priors_.end(), priors_vec_2.begin(), priors_vec_2.end());
-    }
-    else if (visible_nodes_extended[0] == 0) {
-        ROS_INFO("Tail occluded");
-
-        correspondence_priors_ = traverse_euclidean(geodesic_coord_, guide_nodes_, visible_nodes_extended, 0);
-        // priors_vec = traverse_geodesic(geodesic_coord, guide_nodes, visible_nodes, 0);
-    }
-    else if (visible_nodes_extended[visible_nodes_extended.size()-1] == Y_.rows()-1) {
-        ROS_INFO("Head occluded");
-
-        correspondence_priors_ = traverse_euclidean(geodesic_coord_, guide_nodes_, visible_nodes_extended, 1);
-        // priors_vec = traverse_geodesic(geodesic_coord, guide_nodes, visible_nodes, 1);
-    }
-    else {
-        ROS_INFO("Both ends occluded");
-
-        // determine which node moved the least
-        int alignment_node_idx = -1;
-        double moved_dist = 999999;
-        for (int i = 0; i < visible_nodes.size(); i ++) {
-            if (pt2pt_dis(Y_.row(visible_nodes[i]), guide_nodes_.row(i)) < moved_dist) {
-                moved_dist = pt2pt_dis(Y_.row(visible_nodes[i]), guide_nodes_.row(i));
-                alignment_node_idx = i;
-            }
-        }
-
-        // std::cout << "alignment node index: " << alignment_node_idx << std::endl;
-        correspondence_priors_ = traverse_euclidean(geodesic_coord_, guide_nodes_, visible_nodes_extended, 2, alignment_node_idx);
-    }
-
-    // include_lle == false because we have no space to discuss it in the paper
-    cpd_lle (X, Y_, sigma2_, beta_, lambda_, lle_weight_, mu_, max_iter_, tol_, include_lle_, use_geodesic_, use_prev_sigma2_, true, correspondence_priors_, alpha_, kernel_, visible_nodes_extended, k_vis_, visibility_threshold_);
+void tracker::tracking_step (MatrixXd X, 
+                             std::vector<int> visible_nodes, 
+                             std::vector<int> visible_nodes_extended, 
+                             MatrixXd proj_matrix, 
+                             int img_rows, 
+                             int img_cols) {
+    // for later
 }

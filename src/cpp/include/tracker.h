@@ -50,14 +50,14 @@
 using Eigen::MatrixXd;
 using cv::Mat;
 
-class trackdlo
+class tracker
 {
     public:
         // default constructor
-        trackdlo();
-        trackdlo(int num_of_nodes);
+        tracker();
+        tracker(int num_of_nodes);
         // fancy constructor
-        trackdlo(int num_of_nodes,
+        tracker(int num_of_nodes,
                  double visibility_threshold,
                  double beta,
                  double lambda,
@@ -92,6 +92,8 @@ class trackdlo
                       bool include_lle = true,
                       bool use_geodesic = false,
                       bool use_prev_sigma2 = false,
+                      int num_of_dlos = 0,
+                      int nodes_per_dlo = 0,
                       bool use_ecpd = false,
                       std::vector<MatrixXd> correspondence_priors = {},
                       double alpha = 0,

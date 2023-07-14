@@ -7,8 +7,8 @@
     <arg name="result_frame_id" default="camera_color_optical_frame" />
     <arg name="hsv_threshold_upper_limit" default="130 255 255" />
     <!-- <arg name="hsv_threshold_lower_limit" default="100 200 60" /> -->
-    <arg name="hsv_threshold_lower_limit" default="90 90 30" />
-    <!-- <arg name="hsv_threshold_lower_limit" default="90 90 90" /> -->
+    <!-- <arg name="hsv_threshold_lower_limit" default="90 90 30" /> -->
+    <arg name="hsv_threshold_lower_limit" default="90 90 90" />
     <arg name="visualize_initialization_process" default="false" />
 
     <!-- modifying the below parameters is usually not needed -->
@@ -23,7 +23,7 @@
     <arg name="gltp" default="false" />
 
     <!-- load parameters to corresponding nodes -->
-    <!-- <node name="tracker" pkg="multi-dlo" type="tracker" output="screen">
+    <node name="multidlo" pkg="multi-dlo" type="tracker" output="screen">
         <param name="camera_info_topic" type="string" value="$(arg camera_info_topic)" />
         <param name="rgb_topic" type="string" value="$(arg rgb_topic)" />
         <param name="depth_topic" type="string" value="$(arg depth_topic)" />
@@ -32,7 +32,7 @@
         <param name="hsv_threshold_upper_limit" type="string" value="$(arg hsv_threshold_upper_limit)" />
         <param name="hsv_threshold_lower_limit" type="string" value="$(arg hsv_threshold_lower_limit)" />
 
-        <param name="nodes_per_dlo" type="int" value="$(arg num_of_nodes)" />
+        <param name="nodes_per_dlo" type="int" value="$(arg nodes_per_dlo)" />
 
         <param name="beta" value="1" if="$(eval arg('kernel') == 0)"/>
         <param name="lambda" value="50000" if="$(eval arg('kernel') == 0)"/>
@@ -62,7 +62,7 @@
         <param name="visibility_threshold" type="double" value="0.008" />
         <param name="dlo_pixel_width" value="40" />
         <param name="gltp" type="bool" value="$(arg gltp)" />
-    </node> -->
+    </node>
 
     <!-- launch python node for initialization -->
     <node name="init_tracker" pkg="multi-dlo" type="initialize.py" output="screen">
