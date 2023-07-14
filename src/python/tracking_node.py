@@ -23,7 +23,6 @@ import sensor_msgs.point_cloud2 as pcl2
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
-from cdcpd_optimizer import DistanceConstrainedOptimizer
 from utils import post_processing
 
 nodes_per_dlo = 20
@@ -443,7 +442,6 @@ nodes = []
 # H = []
 cur_time = time.time()
 sigma2 = 0
-optimizer = DistanceConstrainedOptimizer(stretch_coefficient=1.05)
 
 def callback (rgb, depth, pc):
     global saved
@@ -453,7 +451,6 @@ def callback (rgb, depth, pc):
     global cur_time
     global sigma2
     global num_of_dlos
-    global optimizer
 
     proj_matrix = np.array([[918.359130859375,              0.0, 645.8908081054688, 0.0], \
                             [             0.0, 916.265869140625,   354.02392578125, 0.0], \
@@ -546,11 +543,11 @@ def callback (rgb, depth, pc):
                     edges[:, 1] = range((num_of_dlos-1)*nodes_per_dlo + 1, num_of_dlos*nodes_per_dlo)
                     edges_collection.append(edges)
         else:
-            all_mask_imgs = os.listdir(os.path.dirname(os.path.abspath(__file__)) + '/utils/first_frame_segmentations/' + folder_name)
+            all_mask_imgs = os.listdir(os.path.dirname(os.path.abspath(__file__)) + '/segmentation/first_frame_segmentations/' + folder_name)
             for mask_img in all_mask_imgs:
                 num_of_dlos += 1
 
-                cur_mask = cv2.imread(os.path.dirname(os.path.abspath(__file__)) + '/utils/first_frame_segmentations/' + folder_name + '/' + mask_img)
+                cur_mask = cv2.imread(os.path.dirname(os.path.abspath(__file__)) + '/segmentation/first_frame_segmentations/' + folder_name + '/' + mask_img)
                 cur_mask = (cur_mask/255).astype(int)
                 filtered_pc = cur_pc * cur_mask
                 filtered_pc = filtered_pc[((filtered_pc[:, :, 0] != 0) | (filtered_pc[:, :, 1] != 0) | (filtered_pc[:, :, 2] != 0))]
@@ -591,8 +588,6 @@ def callback (rgb, depth, pc):
         edges_collection = np.vstack(edges_collection)
         initialized = True
 
-        optimizer.add_edges(template=init_nodes, edges=edges_collection)
-
     # continuous tracking
     if initialized:
 
@@ -625,10 +620,6 @@ def callback (rgb, depth, pc):
                                 use_decoupling = True, 
                                 use_prev_sigma2 = True, 
                                 sigma2_0 = sigma2)
-        
-        # ===== cdcpd optimizer. included here for testing, not included in the extended abstract =====
-        # optimization_result = optimizer.run(nodes)
-        # nodes = optimization_result.astype(nodes.dtype)
 
         nodes = post_processing(nodes, init_nodes, 0.005, num_of_dlos, nodes_per_dlo)
 
