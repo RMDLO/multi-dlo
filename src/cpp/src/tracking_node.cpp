@@ -44,6 +44,7 @@ bool use_geodesic;
 bool use_prev_sigma2;
 int kernel;
 double downsample_leaf_size;
+int nodes_per_dlo;
 
 std::string camera_info_topic;
 std::string rgb_topic;
@@ -252,7 +253,9 @@ sensor_msgs::ImagePtr Callback(const sensor_msgs::ImageConstPtr& image_msg, cons
         cur_time = std::chrono::high_resolution_clock::now();
 
         // perform tracking
-        multi_dlo_tracker.cpd_lle(X, Y, sigma2, 1, 1, 1, mu, 50, tol, true, false, true);
+        int num_of_dlos = Y.rows() / nodes_per_dlo;
+        std::cout << beta << ", " << lambda << std::endl;
+        multi_dlo_tracker.cpd_lle(X, Y, sigma2, beta, lambda, lle_weight, mu, max_iter, tol, true, true, true, num_of_dlos, nodes_per_dlo);
 
         // log time
         time_diff = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - cur_time).count() / 1000.0;
@@ -284,23 +287,33 @@ sensor_msgs::ImagePtr Callback(const sensor_msgs::ImageConstPtr& image_msg, cons
         tracking_img = 0.5*cur_image_orig + 0.5*cur_image;
 
         // draw points
+        std::vector<std::vector<int>> node_colors = {{255, 0, 0, 225}, {255, 255, 0, 225}, {0, 255, 0, 225}};
+        std::vector<std::vector<int>> line_colors = {{255, 0, 0, 225}, {255, 255, 0, 225}, {0, 255, 0, 225}};
+
         for (int idx : indices_vec) {
 
             int x = static_cast<int>(image_coords(idx, 0)/image_coords(idx, 2));
             int y = static_cast<int>(image_coords(idx, 1)/image_coords(idx, 2));
 
-            cv::Scalar point_color = cv::Scalar(0, 255, 0);
-            cv::Scalar line_color = cv::Scalar(0, 255, 0);
+            int dlo_index = idx / nodes_per_dlo;
 
-            cv::line(tracking_img, cv::Point(x, y),
-                                   cv::Point(static_cast<int>(image_coords(idx+1, 0)/image_coords(idx+1, 2)), 
-                                             static_cast<int>(image_coords(idx+1, 1)/image_coords(idx+1, 2))),
-                                   line_color, 5);
+            cv::Scalar point_color = cv::Scalar(node_colors[dlo_index][2], node_colors[dlo_index][1], node_colors[dlo_index][0]);
+            cv::Scalar line_color = cv::Scalar(line_colors[dlo_index][2], line_colors[dlo_index][1], line_colors[dlo_index][0]);
+
+            if ((idx+1) % nodes_per_dlo != 0) {
+                cv::line(tracking_img, cv::Point(x, y),
+                                       cv::Point(static_cast<int>(image_coords(idx+1, 0)/image_coords(idx+1, 2)), 
+                                                 static_cast<int>(image_coords(idx+1, 1)/image_coords(idx+1, 2))),
+                                       line_color, 5);
+            }
 
             cv::circle(tracking_img, cv::Point(x, y), 7, point_color, -1);
-            cv::circle(tracking_img, cv::Point(static_cast<int>(image_coords(idx+1, 0)/image_coords(idx+1, 2)), 
-                                                static_cast<int>(image_coords(idx+1, 1)/image_coords(idx+1, 2))),
-                                                7, point_color, -1);
+
+            if ((idx+2) % nodes_per_dlo == 0) {                
+                cv::circle(tracking_img, cv::Point(static_cast<int>(image_coords(idx+1, 0)/image_coords(idx+1, 2)), 
+                                                   static_cast<int>(image_coords(idx+1, 1)/image_coords(idx+1, 2))),
+                                                   7, point_color, -1);
+            }
         }
 
         // add text
@@ -313,7 +326,7 @@ sensor_msgs::ImagePtr Callback(const sensor_msgs::ImageConstPtr& image_msg, cons
 
         // publish the results as a marker array
         // visualization_msgs::MarkerArray results = MatrixXd2MarkerArray(Y, result_frame_id, "node_results", {1.0, 150.0/255.0, 0.0, 1.0}, {0.0, 1.0, 0.0, 1.0}, 0.01, 0.005, visible_nodes, {1.0, 0.0, 0.0, 1.0}, {1.0, 0.0, 0.0, 1.0});
-        visualization_msgs::MarkerArray results = MatrixXd2MarkerArray(Y, result_frame_id, "node_results", {1.0, 150.0/255.0, 0.0, 1.0}, {0.0, 1.0, 0.0, 1.0}, 0.01, 0.005);
+        visualization_msgs::MarkerArray results = MatrixXd2MarkerArray(Y, result_frame_id, "node_results", node_colors, line_colors, 0.01, 0.005, num_of_dlos, nodes_per_dlo);
 
         // convert to pointcloud2 for eval
         pcl::PointCloud<pcl::PointXYZ> multidlo_pc;
@@ -381,6 +394,7 @@ int main(int argc, char **argv) {
     nh.getParam("/multidlo/kernel", kernel); 
 
     nh.getParam("/multidlo/multi_color_dlo", multi_color_dlo);
+    nh.getParam("/multidlo/nodes_per_dlo", nodes_per_dlo);
     nh.getParam("/multidlo/gltp", gltp);
     nh.getParam("/multidlo/visibility_threshold", visibility_threshold);
     nh.getParam("/multidlo/dlo_pixel_width", dlo_pixel_width);

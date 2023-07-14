@@ -122,10 +122,18 @@ std::vector<int> tracker::get_nearest_indices (int k, int M, int idx) {
     return indices_arr;
 }
 
-MatrixXd tracker::calc_LLE_weights (int k, MatrixXd X) {
+MatrixXd tracker::calc_LLE_weights (int k, MatrixXd X, int nodes_per_dlo) {
     MatrixXd W = MatrixXd::Zero(X.rows(), X.rows());
     for (int i = 0; i < X.rows(); i ++) {
-        std::vector<int> indices = get_nearest_indices(static_cast<int>(k/2), X.rows(), i);
+
+        int dlo_index = i / nodes_per_dlo;
+        int offset = dlo_index * nodes_per_dlo;
+
+        std::vector<int> indices = get_nearest_indices(static_cast<int>(k/2), nodes_per_dlo, i-offset);
+        for (int idx = 0; idx < indices.size(); idx ++) {
+            indices[idx] += offset;
+        }
+
         MatrixXd xi = X.row(i);
         MatrixXd Xi = MatrixXd(indices.size(), X.cols());
 
@@ -268,16 +276,13 @@ bool tracker::cpd_lle (MatrixXd X,
         MatrixXd G_new = MatrixXd::Zero(M, M);
         for (int i = 0; i < num_of_dlos; i ++) {
             int start = i * nodes_per_dlo;
-            int end = (i+1) * nodes_per_dlo;
-            for (int idx = start; idx < end; idx ++) {
-                G_new(idx, idx) = G(idx, idx);
-            }
+            G_new.block(start, start, nodes_per_dlo, nodes_per_dlo) = G.block(start, start, nodes_per_dlo, nodes_per_dlo);
         }
         G = G_new.replicate(1, 1);
     }
 
     // get the LLE matrix
-    MatrixXd L = calc_LLE_weights(6, Y_0);
+    MatrixXd L = calc_LLE_weights(6, Y_0, nodes_per_dlo);
     MatrixXd H = (MatrixXd::Identity(M, M) - L).transpose() * (MatrixXd::Identity(M, M) - L);
 
     // construct R and J
@@ -349,58 +354,61 @@ bool tracker::cpd_lle (MatrixXd X,
         P = P.array().rowwise() / (P.colwise().sum().array() + c);
 
         if (use_geodesic) {
-            std::vector<int> max_p_nodes(P.cols(), 0);
-            MatrixXd pts_dis_sq_geodesic = MatrixXd::Zero(M, N);
+            // std::vector<int> max_p_nodes(P.cols(), 0);
+            // MatrixXd pts_dis_sq_geodesic = MatrixXd::Zero(M, N);
 
-            // loop through all points
-            for (int i = 0; i < N; i ++) {
+            // // loop through all points
+            // for (int i = 0; i < N; i ++) {
                 
-                P.col(i).maxCoeff(&max_p_nodes[i]);
-                int max_p_node = max_p_nodes[i];
+            //     P.col(i).maxCoeff(&max_p_nodes[i]);
+            //     int max_p_node = max_p_nodes[i];
 
-                int potential_2nd_max_p_node_1 = max_p_node - 1;
-                if (potential_2nd_max_p_node_1 == -1) {
-                    potential_2nd_max_p_node_1 = 2;
-                }
+            //     int potential_2nd_max_p_node_1 = max_p_node - 1;
+            //     if (potential_2nd_max_p_node_1 == -1) {
+            //         potential_2nd_max_p_node_1 = 2;
+            //     }
 
-                int potential_2nd_max_p_node_2 = max_p_node + 1;
-                if (potential_2nd_max_p_node_2 == M) {
-                    potential_2nd_max_p_node_2 = M - 3;
-                }
+            //     int potential_2nd_max_p_node_2 = max_p_node + 1;
+            //     if (potential_2nd_max_p_node_2 == M) {
+            //         potential_2nd_max_p_node_2 = M - 3;
+            //     }
 
-                int next_max_p_node;
-                if (pt2pt_dis(Y.row(potential_2nd_max_p_node_1), X.row(i)) < pt2pt_dis(Y.row(potential_2nd_max_p_node_2), X.row(i))) {
-                    next_max_p_node = potential_2nd_max_p_node_1;
-                } 
-                else {
-                    next_max_p_node = potential_2nd_max_p_node_2;
-                }
+            //     int next_max_p_node;
+            //     if (pt2pt_dis(Y.row(potential_2nd_max_p_node_1), X.row(i)) < pt2pt_dis(Y.row(potential_2nd_max_p_node_2), X.row(i))) {
+            //         next_max_p_node = potential_2nd_max_p_node_1;
+            //     } 
+            //     else {
+            //         next_max_p_node = potential_2nd_max_p_node_2;
+            //     }
 
-                // fill the current column of pts_dis_sq_geodesic
-                pts_dis_sq_geodesic(max_p_node, i) = pt2pt_dis_sq(Y.row(max_p_node), X.row(i));
-                pts_dis_sq_geodesic(next_max_p_node, i) = pt2pt_dis_sq(Y.row(next_max_p_node), X.row(i));
+            //     // fill the current column of pts_dis_sq_geodesic
+            //     pts_dis_sq_geodesic(max_p_node, i) = pt2pt_dis_sq(Y.row(max_p_node), X.row(i));
+            //     pts_dis_sq_geodesic(next_max_p_node, i) = pt2pt_dis_sq(Y.row(next_max_p_node), X.row(i));
 
-                if (max_p_node < next_max_p_node) {
-                    for (int j = 0; j < max_p_node; j ++) {
-                        pts_dis_sq_geodesic(j, i) = pow(abs(converted_node_coord[j] - converted_node_coord[max_p_node]) + pt2pt_dis(Y.row(max_p_node), X.row(i)), 2);
-                    }
-                    for (int j = next_max_p_node; j < M; j ++) {
-                        pts_dis_sq_geodesic(j, i) = pow(abs(converted_node_coord[j] - converted_node_coord[next_max_p_node]) + pt2pt_dis(Y.row(next_max_p_node), X.row(i)), 2);
-                    }
-                }
-                else {
-                    for (int j = 0; j < next_max_p_node; j ++) {
-                        pts_dis_sq_geodesic(j, i) = pow(abs(converted_node_coord[j] - converted_node_coord[next_max_p_node]) + pt2pt_dis(Y.row(next_max_p_node), X.row(i)), 2);
-                    }
-                    for (int j = max_p_node; j < M; j ++) {
-                        pts_dis_sq_geodesic(j, i) = pow(abs(converted_node_coord[j] - converted_node_coord[max_p_node]) + pt2pt_dis(Y.row(max_p_node), X.row(i)), 2);
-                    }
-                }
-            }
+            //     if (max_p_node < next_max_p_node) {
+            //         for (int j = 0; j < max_p_node; j ++) {
+            //             pts_dis_sq_geodesic(j, i) = pow(abs(converted_node_coord[j] - converted_node_coord[max_p_node]) + pt2pt_dis(Y.row(max_p_node), X.row(i)), 2);
+            //         }
+            //         for (int j = next_max_p_node; j < M; j ++) {
+            //             pts_dis_sq_geodesic(j, i) = pow(abs(converted_node_coord[j] - converted_node_coord[next_max_p_node]) + pt2pt_dis(Y.row(next_max_p_node), X.row(i)), 2);
+            //         }
+            //     }
+            //     else {
+            //         for (int j = 0; j < next_max_p_node; j ++) {
+            //             pts_dis_sq_geodesic(j, i) = pow(abs(converted_node_coord[j] - converted_node_coord[next_max_p_node]) + pt2pt_dis(Y.row(next_max_p_node), X.row(i)), 2);
+            //         }
+            //         for (int j = max_p_node; j < M; j ++) {
+            //             pts_dis_sq_geodesic(j, i) = pow(abs(converted_node_coord[j] - converted_node_coord[max_p_node]) + pt2pt_dis(Y.row(max_p_node), X.row(i)), 2);
+            //         }
+            //     }
+            // }
 
-            // update P
-            P = (-0.5 * pts_dis_sq_geodesic / sigma2).array().exp();
-            // P = P.array().rowwise() / (P.colwise().sum().array() + c);
+            // // update P
+            // P = (-0.5 * pts_dis_sq_geodesic / sigma2).array().exp();
+            // // P = P.array().rowwise() / (P.colwise().sum().array() + c);
+
+            // temp quick test
+            P = P_stored.replicate(1, 1);
         }
         else {
             P = P_stored.replicate(1, 1);

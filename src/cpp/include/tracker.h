@@ -130,7 +130,7 @@ class tracker
         double visibility_threshold_;
 
         std::vector<int> get_nearest_indices (int k, int M, int idx);
-        MatrixXd calc_LLE_weights (int k, MatrixXd X);
+        MatrixXd calc_LLE_weights (int k, MatrixXd X, int nodes_per_dlo);
         std::vector<MatrixXd> traverse_geodesic (std::vector<double> geodesic_coord, const MatrixXd guide_nodes, 
                                                  const std::vector<int> visible_nodes, int alignment);
         std::vector<MatrixXd> traverse_euclidean (std::vector<double> geodesic_coord, const MatrixXd guide_nodes, 

@@ -244,10 +244,12 @@ std::vector<MatrixXd> line_sphere_intersection (MatrixXd point_A, MatrixXd point
 visualization_msgs::MarkerArray MatrixXd2MarkerArray (MatrixXd Y,
                                                       std::string marker_frame, 
                                                       std::string marker_ns, 
-                                                      std::vector<float> node_color, 
-                                                      std::vector<float> line_color, 
+                                                      std::vector<std::vector<int>> node_colors, 
+                                                      std::vector<std::vector<int>> line_colors, 
                                                       double node_scale,
                                                       double line_scale,
+                                                      int num_of_dlos,
+                                                      int nodes_per_dlo,
                                                       std::vector<int> visible_nodes, 
                                                       std::vector<float> occluded_node_color,
                                                       std::vector<float> occluded_line_color) {    // publish the results as a marker array
@@ -257,6 +259,10 @@ visualization_msgs::MarkerArray MatrixXd2MarkerArray (MatrixXd Y,
     bool last_node_visible = true;
     for (int i = 0; i < Y.rows(); i ++) {
         visualization_msgs::Marker cur_node_result = visualization_msgs::Marker();
+
+        int dlo_index = i / nodes_per_dlo;
+        std::vector<int> node_color = node_colors[dlo_index];
+        std::vector<int> line_color = line_colors[dlo_index];
     
         // add header
         cur_node_result.header.frame_id = marker_frame;
@@ -292,17 +298,17 @@ visualization_msgs::MarkerArray MatrixXd2MarkerArray (MatrixXd Y,
             cur_node_visible = false;
         }
         else {
-            cur_node_result.color.r = node_color[0];
-            cur_node_result.color.g = node_color[1];
-            cur_node_result.color.b = node_color[2];
-            cur_node_result.color.a = node_color[3];
+            cur_node_result.color.r = static_cast<double>(node_color[0]) / 255.0;
+            cur_node_result.color.g = static_cast<double>(node_color[1]) / 255.0;
+            cur_node_result.color.b = static_cast<double>(node_color[2]) / 255.0;
+            cur_node_result.color.a = static_cast<double>(node_color[3]) / 255.0;
             cur_node_visible = true;
         }
 
         results.markers.push_back(cur_node_result);
 
         // don't add line if at the first node
-        if (i == 0) {
+        if (i == 0 || i % nodes_per_dlo == 0) {
             continue;
         }
 
@@ -338,10 +344,10 @@ visualization_msgs::MarkerArray MatrixXd2MarkerArray (MatrixXd Y,
 
         // set color
         if (last_node_visible && cur_node_visible) {
-            cur_line_result.color.r = line_color[0];
-            cur_line_result.color.g = line_color[1];
-            cur_line_result.color.b = line_color[2];
-            cur_line_result.color.a = line_color[3];
+            cur_line_result.color.r = static_cast<double>(line_color[0]) / 255.0;
+            cur_line_result.color.g = static_cast<double>(line_color[1]) / 255.0;
+            cur_line_result.color.b = static_cast<double>(line_color[2]) / 255.0;
+            cur_line_result.color.a = static_cast<double>(line_color[3]) / 255.0;
         }
         else {
             cur_line_result.color.r = occluded_line_color[0];

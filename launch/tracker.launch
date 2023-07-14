@@ -13,7 +13,7 @@
 
     <!-- modifying the below parameters is usually not needed -->
     <!-- kernel: 0 -> Laplacian; 1 -> 1st order; 2nd -> 2nd order; 3 -> Gaussian -->
-    <arg name="kernel" default="1" />
+    <arg name="kernel" default="3" />
     <arg name="multi_color_dlo" default="false" />
 
     <arg name="nodes_per_dlo" default="20" />
@@ -43,8 +43,8 @@
         <param name="beta" value="0.3" if="$(eval arg('kernel') == 2)"/>
         <param name="lambda" value="50000" if="$(eval arg('kernel') == 2)"/>
 
-        <param name="beta" value="0.2" if="$(eval arg('kernel') == 3)"/>
-        <param name="lambda" value="50000" if="$(eval arg('kernel') == 3)"/>
+        <param name="beta" value="0.8" if="$(eval arg('kernel') == 3)"/>
+        <param name="lambda" value="1" if="$(eval arg('kernel') == 3)"/>
 
         <param name="alpha" value="3" />
         <param name="lle_weight" value="10.0" />
