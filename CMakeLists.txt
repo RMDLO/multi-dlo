@@ -4,9 +4,7 @@ project(multi-dlo)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_compile_options(-O3)   # -std=c++11
-
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
+add_compile_options(-O3) 
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -23,7 +21,6 @@ find_package(catkin REQUIRED COMPONENTS
 
 add_definitions(${PCL_DEFINITIONS})
 
-find_package(GUROBI REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
 find_package(PCL 1.8 REQUIRED COMPONENTS common io filters visualization features kdtree)
@@ -32,7 +29,6 @@ include_directories(include SYSTEM PUBLIC
   ${Eigen_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
-  ${GUROBI_INCLUDE_DIRS}
 )
 
 catkin_package(
@@ -42,25 +38,24 @@ catkin_package(
 #  DEPENDS system_lib
 )
 
+add_executable(
+  tracker src/cpp/src/tracking_node.cpp src/cpp/src/tracker.cpp src/cpp/src/utils.cpp
+)
+target_link_libraries(tracker
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+  ${OpenCV_LIBS}
+  Eigen3::Eigen
+)
+# target_compile_options(trackdlo PRIVATE -O3 -Wall -Wextra -Wconversion -Wshadow -g)
+
 # add_executable(
-#   tracker src/cpp/src/tracking_node.cpp src/cpp/src/tracker.cpp src/cpp/src/utils.cpp
+#   eigen_test src/cpp/src/test.cpp
 # )
-# target_link_libraries(tracker
+# target_link_libraries(eigen_test
 #   ${catkin_LIBRARIES}
 #   ${PCL_LIBRARIES}
 #   ${OpenCV_LIBS}
 #   Eigen3::Eigen
 # )
-# # target_compile_options(trackdlo PRIVATE -O3 -Wall -Wextra -Wconversion -Wshadow -g)
-
-add_executable(
-  eigen_test src/cpp/src/test.cpp
-)
-target_link_libraries(eigen_test
-  ${catkin_LIBRARIES}
-  ${PCL_LIBRARIES}
-  ${OpenCV_LIBS}
-  ${GUROBI_LIBRARIES}
-  Eigen3::Eigen
-)
-# target_compile_options(cv_test PRIVATE -O3 -Wall -Wextra -Wconversion -Wshadow -g)
+# # target_compile_options(cv_test PRIVATE -O3 -Wall -Wextra -Wconversion -Wshadow -g)

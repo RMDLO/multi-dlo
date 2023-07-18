@@ -43,8 +43,6 @@
 #include <cstdlib>
 #include <signal.h>
 
-#include "/home/jingyixiang/gurobi912/linux64/include/gurobi_c++.h"
-
 #ifndef TRACKER_H
 #define TRACKER_H
 
@@ -93,9 +91,7 @@ class tracker
                       bool include_lle = true,
                       bool use_geodesic = false,
                       bool use_prev_sigma2 = false,
-                      int num_of_dlos = 0,
                       int nodes_per_dlo = 0,
-                      bool use_ecpd = false,
                       std::vector<MatrixXd> correspondence_priors = {},
                       double alpha = 0,
                       int kernel = 3,
@@ -132,11 +128,6 @@ class tracker
 
         std::vector<int> get_nearest_indices (int k, int M, int idx);
         MatrixXd calc_LLE_weights (int k, MatrixXd X, int nodes_per_dlo);
-        std::vector<MatrixXd> traverse_geodesic (std::vector<double> geodesic_coord, const MatrixXd guide_nodes, 
-                                                 const std::vector<int> visible_nodes, int alignment);
-        std::vector<MatrixXd> traverse_euclidean (std::vector<double> geodesic_coord, const MatrixXd guide_nodes, 
-                                                  const std::vector<int> visible_nodes, int alignment, int alignment_node_idx = -1);
-
 };
 
 #endif

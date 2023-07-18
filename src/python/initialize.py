@@ -157,11 +157,11 @@ def callback (rgb, depth):
                 edges[:, 0] = range((num_of_dlos-1)*nodes_per_dlo, num_of_dlos*nodes_per_dlo - 1)
                 edges[:, 1] = range((num_of_dlos-1)*nodes_per_dlo + 1, num_of_dlos*nodes_per_dlo)
     else:
-        all_mask_imgs = os.listdir(os.path.dirname(os.path.abspath(__file__)) + '/segmentation/first_frame_segmentations/' + folder_name)
+        all_mask_imgs = os.listdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + '/segmentation/first_frame_segmentations/' + folder_name)
         for mask_img in all_mask_imgs:
             num_of_dlos += 1
 
-            cur_mask = cv2.imread(os.path.dirname(os.path.abspath(__file__)) + '/segmentation/first_frame_segmentations/' + folder_name + '/' + mask_img)
+            cur_mask = cv2.imread(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + '/segmentation/first_frame_segmentations/' + folder_name + '/' + mask_img)
             cur_mask = (cur_mask/255).astype(int)
             filtered_pc = cur_pc * cur_mask
             filtered_pc = filtered_pc[((filtered_pc[:, :, 0] != 0) | (filtered_pc[:, :, 1] != 0) | (filtered_pc[:, :, 2] != 0))]

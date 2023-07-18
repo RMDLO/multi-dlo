@@ -5,8 +5,6 @@ using cv::Mat;
 
 ros::Publisher pc_pub;
 ros::Publisher results_pub;
-ros::Publisher guide_nodes_pub;
-ros::Publisher corr_priors_pub;
 ros::Publisher result_pc_pub;
 ros::Subscriber init_nodes_sub;
 ros::Subscriber camera_info_sub;
@@ -25,12 +23,7 @@ Mat occlusion_mask;
 bool updated_opencv_mask = false;
 MatrixXd proj_matrix(3, 4);
 
-double total_len = 0;
-
 bool multi_color_dlo;
-bool gltp;
-double visibility_threshold;
-int dlo_pixel_width;
 double beta;
 double lambda;
 double alpha;
@@ -38,11 +31,9 @@ double lle_weight;
 double mu;
 int max_iter;
 double tol;
-double k_vis;
 bool include_lle;
 bool use_geodesic;
 bool use_prev_sigma2;
-int kernel;
 double downsample_leaf_size;
 int nodes_per_dlo;
 
@@ -132,9 +123,9 @@ sensor_msgs::ImagePtr Callback(const sensor_msgs::ImageConstPtr& image_msg, cons
     
     if (!initialized) {
         if (received_init_nodes && received_proj_matrix) {
-            multi_dlo_tracker = tracker(init_nodes.rows(), visibility_threshold, beta, lambda, alpha, lle_weight, k_vis, mu, max_iter, tol, include_lle, use_geodesic, use_prev_sigma2, kernel);
+            multi_dlo_tracker = tracker(init_nodes.rows(), 0.01, beta, lambda, alpha, lle_weight, 0, mu, max_iter, tol, include_lle, use_geodesic, use_prev_sigma2, 3);
 
-            sigma2 = 0.001;
+            sigma2 = 0.00001;
 
             // record geodesic coord
             double cur_sum = 0;
@@ -254,8 +245,7 @@ sensor_msgs::ImagePtr Callback(const sensor_msgs::ImageConstPtr& image_msg, cons
 
         // perform tracking
         int num_of_dlos = Y.rows() / nodes_per_dlo;
-        std::cout << beta << ", " << lambda << std::endl;
-        multi_dlo_tracker.cpd_lle(X, Y, sigma2, beta, lambda, lle_weight, mu, max_iter, tol, true, true, true, num_of_dlos, nodes_per_dlo);
+        multi_dlo_tracker.cpd_lle(X, Y, sigma2, beta, lambda, lle_weight, mu, max_iter, tol, include_lle, use_geodesic, use_prev_sigma2, nodes_per_dlo);
 
         // log time
         time_diff = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - cur_time).count() / 1000.0;
@@ -287,8 +277,8 @@ sensor_msgs::ImagePtr Callback(const sensor_msgs::ImageConstPtr& image_msg, cons
         tracking_img = 0.5*cur_image_orig + 0.5*cur_image;
 
         // draw points
-        std::vector<std::vector<int>> node_colors = {{255, 0, 0, 225}, {255, 255, 0, 225}, {0, 255, 0, 225}};
-        std::vector<std::vector<int>> line_colors = {{255, 0, 0, 225}, {255, 255, 0, 225}, {0, 255, 0, 225}};
+        std::vector<std::vector<int>> node_colors = {{255, 0, 0, 255}, {255, 255, 0, 255}, {0, 255, 0, 255}};
+        std::vector<std::vector<int>> line_colors = {{255, 0, 0, 255}, {255, 255, 0, 255}, {0, 255, 0, 255}};
 
         for (int idx : indices_vec) {
 
@@ -326,7 +316,7 @@ sensor_msgs::ImagePtr Callback(const sensor_msgs::ImageConstPtr& image_msg, cons
 
         // publish the results as a marker array
         // visualization_msgs::MarkerArray results = MatrixXd2MarkerArray(Y, result_frame_id, "node_results", {1.0, 150.0/255.0, 0.0, 1.0}, {0.0, 1.0, 0.0, 1.0}, 0.01, 0.005, visible_nodes, {1.0, 0.0, 0.0, 1.0}, {1.0, 0.0, 0.0, 1.0});
-        visualization_msgs::MarkerArray results = MatrixXd2MarkerArray(Y, result_frame_id, "node_results", node_colors, line_colors, 0.01, 0.005, num_of_dlos, nodes_per_dlo);
+        visualization_msgs::MarkerArray results = MatrixXd2MarkerArray(Y, result_frame_id, "node_results", node_colors, line_colors, 0.006, 0.003, num_of_dlos, nodes_per_dlo);
 
         // convert to pointcloud2 for eval
         pcl::PointCloud<pcl::PointXYZ> multidlo_pc;
@@ -387,17 +377,12 @@ int main(int argc, char **argv) {
     nh.getParam("/multidlo/mu", mu); 
     nh.getParam("/multidlo/max_iter", max_iter); 
     nh.getParam("/multidlo/tol", tol);
-    nh.getParam("/multidlo/k_vis", k_vis);
     nh.getParam("/multidlo/include_lle", include_lle); 
     nh.getParam("/multidlo/use_geodesic", use_geodesic); 
     nh.getParam("/multidlo/use_prev_sigma2", use_prev_sigma2); 
-    nh.getParam("/multidlo/kernel", kernel); 
 
     nh.getParam("/multidlo/multi_color_dlo", multi_color_dlo);
     nh.getParam("/multidlo/nodes_per_dlo", nodes_per_dlo);
-    nh.getParam("/multidlo/gltp", gltp);
-    nh.getParam("/multidlo/visibility_threshold", visibility_threshold);
-    nh.getParam("/multidlo/dlo_pixel_width", dlo_pixel_width);
     nh.getParam("/multidlo/downsample_leaf_size", downsample_leaf_size);
 
     nh.getParam("/multidlo/camera_info_topic", camera_info_topic);
@@ -451,8 +436,6 @@ int main(int argc, char **argv) {
     image_transport::Publisher tracking_img_pub = it.advertise("/results_img", pub_queue_size);
     pc_pub = nh.advertise<sensor_msgs::PointCloud2>("/filtered_pointcloud", pub_queue_size);
     results_pub = nh.advertise<visualization_msgs::MarkerArray>("/results_marker", pub_queue_size);
-    guide_nodes_pub = nh.advertise<visualization_msgs::MarkerArray>("/guide_nodes", pub_queue_size);
-    corr_priors_pub = nh.advertise<visualization_msgs::MarkerArray>("/corr_priors", pub_queue_size);
 
     // point cloud topic
     result_pc_pub = nh.advertise<sensor_msgs::PointCloud2>("/results_pc", pub_queue_size);
