@@ -23,12 +23,9 @@ import sensor_msgs.point_cloud2 as pcl2
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
-from utils import post_processing
-
 nodes_per_dlo = 20
 num_of_dlos = 0
 use_first_frame_masks = sys.argv[1]
-seg_dist = 0.02
 folder_name = ''
 if use_first_frame_masks.lower() == 'true':
     folder_name = sys.argv[2]
@@ -227,47 +224,47 @@ def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol, use_decoupling=Fa
         P = np.divide(P, den)
         max_p_nodes = np.argmax(P, axis=0)
 
-        if use_decoupling:
-            potential_2nd_max_p_nodes_1 = max_p_nodes - 1
-            potential_2nd_max_p_nodes_2 = max_p_nodes + 1
-            potential_2nd_max_p_nodes_1 = np.where(potential_2nd_max_p_nodes_1 < 0, 1, potential_2nd_max_p_nodes_1)
-            potential_2nd_max_p_nodes_2 = np.where(potential_2nd_max_p_nodes_2 > M-1, M-2, potential_2nd_max_p_nodes_2)
-            potential_2nd_max_p_nodes_1_select = np.vstack((np.arange(0, N), potential_2nd_max_p_nodes_1)).T
-            potential_2nd_max_p_nodes_2_select = np.vstack((np.arange(0, N), potential_2nd_max_p_nodes_2)).T
-            potential_2nd_max_p_1 = P.T[tuple(map(tuple, potential_2nd_max_p_nodes_1_select.T))]
-            potential_2nd_max_p_2 = P.T[tuple(map(tuple, potential_2nd_max_p_nodes_2_select.T))]
-            next_max_p_nodes = np.where(potential_2nd_max_p_1 > potential_2nd_max_p_2, potential_2nd_max_p_nodes_1, potential_2nd_max_p_nodes_2)
-            node_indices_diff = max_p_nodes - next_max_p_nodes
-            max_node_smaller_index = np.arange(0, N)[node_indices_diff < 0]
-            max_node_larger_index = np.arange(0, N)[node_indices_diff > 0]
-            dis_to_max_p_nodes = np.sqrt(np.sum(np.square(Y[max_p_nodes]-X), axis=1))
-            dis_to_2nd_largest_p_nodes = np.sqrt(np.sum(np.square(Y[next_max_p_nodes]-X), axis=1))
-            converted_P = np.zeros((M, N)).T
+        # if use_decoupling:
+        #     potential_2nd_max_p_nodes_1 = max_p_nodes - 1
+        #     potential_2nd_max_p_nodes_2 = max_p_nodes + 1
+        #     potential_2nd_max_p_nodes_1 = np.where(potential_2nd_max_p_nodes_1 < 0, 1, potential_2nd_max_p_nodes_1)
+        #     potential_2nd_max_p_nodes_2 = np.where(potential_2nd_max_p_nodes_2 > M-1, M-2, potential_2nd_max_p_nodes_2)
+        #     potential_2nd_max_p_nodes_1_select = np.vstack((np.arange(0, N), potential_2nd_max_p_nodes_1)).T
+        #     potential_2nd_max_p_nodes_2_select = np.vstack((np.arange(0, N), potential_2nd_max_p_nodes_2)).T
+        #     potential_2nd_max_p_1 = P.T[tuple(map(tuple, potential_2nd_max_p_nodes_1_select.T))]
+        #     potential_2nd_max_p_2 = P.T[tuple(map(tuple, potential_2nd_max_p_nodes_2_select.T))]
+        #     next_max_p_nodes = np.where(potential_2nd_max_p_1 > potential_2nd_max_p_2, potential_2nd_max_p_nodes_1, potential_2nd_max_p_nodes_2)
+        #     node_indices_diff = max_p_nodes - next_max_p_nodes
+        #     max_node_smaller_index = np.arange(0, N)[node_indices_diff < 0]
+        #     max_node_larger_index = np.arange(0, N)[node_indices_diff > 0]
+        #     dis_to_max_p_nodes = np.sqrt(np.sum(np.square(Y[max_p_nodes]-X), axis=1))
+        #     dis_to_2nd_largest_p_nodes = np.sqrt(np.sum(np.square(Y[next_max_p_nodes]-X), axis=1))
+        #     converted_P = np.zeros((M, N)).T
 
-            for idx in max_node_smaller_index:
-                converted_P[idx, 0:max_p_nodes[idx]+1] = converted_node_dis[max_p_nodes[idx], 0:max_p_nodes[idx]+1] + dis_to_max_p_nodes[idx]
-                converted_P[idx, next_max_p_nodes[idx]:M] = converted_node_dis[next_max_p_nodes[idx], next_max_p_nodes[idx]:M] + dis_to_2nd_largest_p_nodes[idx]
+        #     for idx in max_node_smaller_index:
+        #         converted_P[idx, 0:max_p_nodes[idx]+1] = converted_node_dis[max_p_nodes[idx], 0:max_p_nodes[idx]+1] + dis_to_max_p_nodes[idx]
+        #         converted_P[idx, next_max_p_nodes[idx]:M] = converted_node_dis[next_max_p_nodes[idx], next_max_p_nodes[idx]:M] + dis_to_2nd_largest_p_nodes[idx]
 
-            for idx in max_node_larger_index:
-                converted_P[idx, 0:next_max_p_nodes[idx]+1] = converted_node_dis[next_max_p_nodes[idx], 0:next_max_p_nodes[idx]+1] + dis_to_2nd_largest_p_nodes[idx]
-                converted_P[idx, max_p_nodes[idx]:M] = converted_node_dis[max_p_nodes[idx], max_p_nodes[idx]:M] + dis_to_max_p_nodes[idx]
+        #     for idx in max_node_larger_index:
+        #         converted_P[idx, 0:next_max_p_nodes[idx]+1] = converted_node_dis[next_max_p_nodes[idx], 0:next_max_p_nodes[idx]+1] + dis_to_2nd_largest_p_nodes[idx]
+        #         converted_P[idx, max_p_nodes[idx]:M] = converted_node_dis[max_p_nodes[idx], max_p_nodes[idx]:M] + dis_to_max_p_nodes[idx]
 
-            converted_P = converted_P.T
+        #     converted_P = converted_P.T
 
-            P = np.exp(-np.square(converted_P) / (2 * sigma2))
+        #     P = np.exp(-np.square(converted_P) / (2 * sigma2))
 
-            # if not on the same dlo, converted_P has to be >= 10 since z = 10
-            P = np.where(P < -10*10/(2 * sigma2), 0, P)
+        #     # if not on the same dlo, converted_P has to be >= 10 since z = 10
+        #     P = np.where(P < -10*10/(2 * sigma2), 0, P)
 
-            den = np.sum(P, axis=0)
-            den = np.tile(den, (M, 1))
-            den[den == 0] = np.finfo(float).eps
-            c = (2 * np.pi * sigma2) ** (D / 2)
-            c = c * mu / (1 - mu)
-            c = c * M / N
-            den += c
+        #     den = np.sum(P, axis=0)
+        #     den = np.tile(den, (M, 1))
+        #     den[den == 0] = np.finfo(float).eps
+        #     c = (2 * np.pi * sigma2) ** (D / 2)
+        #     c = c * mu / (1 - mu)
+        #     c = c * M / N
+        #     den += c
 
-            P = np.divide(P, den)
+        #     P = np.divide(P, den)
 
         Pt1 = np.sum(P, axis=0)
         P1 = np.sum(P, axis=1)
@@ -617,8 +614,6 @@ def callback (rgb, depth, pc):
                                 use_prev_sigma2 = True, 
                                 sigma2_0 = sigma2)
 
-        nodes = post_processing(nodes, init_nodes, 0.005, num_of_dlos, nodes_per_dlo)
-
         init_nodes = nodes.copy()
 
         alpha = 1
@@ -701,9 +696,9 @@ if __name__=='__main__':
                 PointField('rgba', 12, PointField.UINT32, 1)]
     pc_pub = rospy.Publisher ('/pts', PointCloud2, queue_size=10)
 
-    tracking_img_pub = rospy.Publisher ('/tracking_img', Image, queue_size=10)
+    tracking_img_pub = rospy.Publisher ('/results_img', Image, queue_size=10)
     mask_img_pub = rospy.Publisher('/mask', Image, queue_size=10)
-    results_pub = rospy.Publisher ('/results', MarkerArray, queue_size=10)
+    results_pub = rospy.Publisher ('/results_marker', MarkerArray, queue_size=10)
 
     ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub, pc_sub], 10)
     ts.registerCallback(callback)
