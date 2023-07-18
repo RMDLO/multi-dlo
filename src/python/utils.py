@@ -884,8 +884,8 @@ def add_self_intersection_constraints (model, vars, dlo_diameter, Y, num_of_dlos
             # pA is the point on edge y_i, y_{i+1}
             # pB is the point on edge y_j, y_{j+1}
             # the below definition should be consistent with CDCPD2's Eq 18-21
-            r_i = (pA - Y[i+1]) / (Y[i] - Y[i+1])
-            r_j = (pB - Y[j+1]) / (Y[j] - Y[j+1])
+            r_i = (pA - Y[i+1]) / (Y[i] - Y[i+1])  # element-wise division
+            r_j = (pB - Y[j+1]) / (Y[j] - Y[j+1])  # element-wise division
 
             pA_var = r_i*vars[i] + (1 - r_i)*vars[i+1]
             pB_var = r_j*vars[j] + (1 - r_j)*vars[j+1]

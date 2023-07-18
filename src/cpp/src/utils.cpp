@@ -240,6 +240,179 @@ std::vector<MatrixXd> line_sphere_intersection (MatrixXd point_A, MatrixXd point
     return intersections;
 }
 
+std::tuple<MatrixXd, MatrixXd, double> shortest_dist_between_lines (MatrixXd a0, MatrixXd a1, MatrixXd b0, MatrixXd b1, bool clamp) {
+    MatrixXd A = a1 - a0;
+    MatrixXd B = b1 - b0;
+    MatrixXd A_normalized = A / A.norm();
+    MatrixXd B_normalized = B / B.norm();
+
+    MatrixXd cross = cross_product(A, B);
+    double denom = cross.squaredNorm();
+
+    // If lines are parallel (denom=0) test if lines overlap.
+    // If they don't overlap then there is a closest point solution.
+    // If they do overlap, there are infinite closest positions, but there is a closest distance
+    if (denom == 0) {
+        double d0 = dot_product(A_normalized, b0-a0);
+
+        // Overlap only possible with clamping
+        if (clamp) {
+            double d1 = dot_product(A_normalized, b1-a0);
+
+            // is segment B before A?
+            if (d0 <= 0 && d1 <= 0) {
+                if (abs(d0) < abs(d1)) {
+                    return {a0, b0, (a0-b0).norm()};
+                }
+                else {
+                    return {a0, b1, (a0-b1).norm()};
+                }
+            }
+
+            // is segment B after A?
+            else if (d0 >= A.norm() && d1 >= A.norm()) {
+                if (abs(d0) < abs(d1)) {
+                    return {a1, b0, (a1-b0).norm()};
+                }
+                else {
+                    return {a1, b1, (a1-b1).norm()};
+                }
+            }
+        }
+
+        // Segments overlap, return distance between parallel segments
+        return {MatrixXd::Zero(1, 3), MatrixXd::Zero(1, 3), (d0*A_normalized+a0-b0).norm()};
+    }
+
+    // Lines criss-cross: Calculate the projected closest points
+    MatrixXd t = b0 - a0;
+    MatrixXd tempA = MatrixXd::Zero(3, 3);
+    tempA.block(0, 0, 1, 3) = t;
+    tempA.block(1, 0, 1, 3) = B_normalized;
+    tempA.block(2, 0, 1, 3) = cross.transpose();
+
+    MatrixXd tempB = MatrixXd::Zero(3, 3);
+    tempB.block(0, 0, 1, 3) = t;
+    tempB.block(1, 0, 1, 3) = A_normalized;
+    tempB.block(2, 0, 1, 3) = cross.transpose();
+
+    double t0 = tempA.determinant() / denom;
+    double t1 = tempB.determinant() / denom;
+
+    MatrixXd pA = a0 + (A_normalized * t0);  // projected closest point on segment A
+    MatrixXd pB = b0 + (B_normalized * t1);  // projected closest point on segment B
+
+    // clamp
+    if (clamp) {
+        if (t0 < 0) {
+            pA = a0.replicate(1, 1);
+        }
+        else if (t0 > A.norm()) {
+            pA = a1.replicate(1, 1);
+        }
+
+        if (t1 < 0) {
+            pB = b0.replicate(1, 1);
+        }
+        else if (t1 > B.norm()) {
+            pB = b1.replicate(1, 1);
+        }
+
+        // clamp projection A
+        if (t0 < 0 || t0 > A.norm()) {
+            double dot = dot_product(B_normalized, pA-b0);
+            if (dot < 0) {
+                dot = 0;
+            }
+            else if (dot > B.norm()) {
+                dot = B.norm();
+            }
+            pB = b0 + (B_normalized * dot);
+        }
+
+        // clamp projection B
+        if (t1 < 0 || t1 > B.norm()) {
+            double dot = dot_product(A_normalized, pB-a0);
+            if (dot < 0) {
+                dot = 0;
+            }
+            else if (dot > A.norm()) {
+                dot = A.norm();
+            }
+            pA = a0 + (A_normalized * dot);
+        }
+    }
+
+    return {pA, pB, (pA-pB).norm()};
+}
+
+static GRBEnv& getGRBEnv () {
+    static GRBEnv env;
+    return env;
+}
+
+MatrixXd post_processing (MatrixXd Y_0, MatrixXd Y, double dlo_diameter, int nodes_per_dlo) {
+    MatrixXd Y_processed = MatrixXd::Zero(Y.rows(), Y.cols());
+    int num_of_dlos = Y.rows() / nodes_per_dlo;
+
+    GRBVar* vars = nullptr;
+    GRBEnv& env = getGRBEnv();
+    env.set(GRB_IntParam_OutputFlag, 0);
+    GRBModel model(env);
+    // model.set("ScaleFlag", "0");
+    // model.set("FeasibilityTol", "0.01");
+
+    // add vars to the model
+    const ssize_t num_of_vars = 3 * Y.rows();
+    const std::vector<double> lower_bound(num_of_vars, -GRB_INFINITY);
+    const std::vector<double> upper_bound(num_of_vars, GRB_INFINITY);
+    vars = model.addVars(lower_bound.data(), upper_bound.data(), nullptr, nullptr, nullptr, (int) num_of_vars);
+    std::vector<GRBLinExpr> g_verts = {};
+    for (int i = 0; i < num_of_vars; i ++) {
+        
+    }
+
+    // add constraints to the model
+    for (int i = 0; i < Y.rows()-1; i ++) {
+        for (int j = i; j < Y.rows()-1; j ++) {
+            // edge 1: y_i, y_{i+1}
+            // edge 2: y_j, y_{j+1}
+            if (abs(i - j) <= 1) {
+                continue;
+            }
+
+            // for multiple dlos
+            if (num_of_dlos > 1) {
+                if ((i+1) % nodes_per_dlo == 0 || (j+1) % nodes_per_dlo == 0) {
+                    continue;
+                }
+            }
+
+            auto[pA, pB, dist] = shortest_dist_between_lines(Y_0.row(i), Y_0.row(i+1), Y_0.row(j), Y_0.row(j+1), true);
+            if (dist >= dlo_diameter) {
+                continue;
+            }
+
+            std::cout << "Adding self-intersection constraint between E(" << i << ", " << i+1 << ") and E(" << j << ", " << j+1 << ")" << std::endl;
+
+            // pA is the point on edge y_i, y_{i+1}
+            // pB is the point on edge y_j, y_{j+1}
+            // the below definition should be consistent with CDCPD2's Eq 18-21
+            double r_i = ((pA - Y.row(i+1)).array() / (Y.row(i) - Y.row(i+1)).array())(0, 0);
+            double r_j = ((pB - Y.row(j+1)).array() / (Y.row(j) - Y.row(j+1)).array())(0, 0);
+
+            // === Python ===
+            // pA_var = r_i*vars[i] + (1 - r_i)*vars[i+1]
+            // pB_var = r_j*vars[j] + (1 - r_j)*vars[j+1]
+            // // model.addConstr(operator.ge(np.sum(np.square(pA_var - pB_var)), dlo_diameter**2))
+            // model.addConstr(operator.ge(((pA_var[0] - pB_var[0])*(pA[0] - pB[0]) +
+            //                              (pA_var[1] - pB_var[1])*(pA[1] - pB[1]) +
+            //                              (pA_var[2] - pB_var[2])*(pA[2] - pB[2])) / np.linalg.norm(pA - pB), dlo_diameter))
+            
+        }
+    }
+}
+
 // node color and object color are in rgba format and range from 0-1
 visualization_msgs::MarkerArray MatrixXd2MarkerArray (MatrixXd Y,
                                                       std::string marker_frame, 
