@@ -23,12 +23,9 @@ import sensor_msgs.point_cloud2 as pcl2
 from visualization_msgs.msg import Marker
 from visualization_msgs.msg import MarkerArray
 
-from cdcpd_optimizer import DistanceConstrainedOptimizer
-
 nodes_per_dlo = 20
 num_of_dlos = 0
 use_first_frame_masks = sys.argv[1]
-seg_dist = 0.02
 folder_name = ''
 if use_first_frame_masks.lower() == 'true':
     folder_name = sys.argv[2]
@@ -227,47 +224,47 @@ def cpd_lle (X, Y_0, beta, alpha, k, gamma, mu, max_iter, tol, use_decoupling=Fa
         P = np.divide(P, den)
         max_p_nodes = np.argmax(P, axis=0)
 
-        if use_decoupling:
-            potential_2nd_max_p_nodes_1 = max_p_nodes - 1
-            potential_2nd_max_p_nodes_2 = max_p_nodes + 1
-            potential_2nd_max_p_nodes_1 = np.where(potential_2nd_max_p_nodes_1 < 0, 1, potential_2nd_max_p_nodes_1)
-            potential_2nd_max_p_nodes_2 = np.where(potential_2nd_max_p_nodes_2 > M-1, M-2, potential_2nd_max_p_nodes_2)
-            potential_2nd_max_p_nodes_1_select = np.vstack((np.arange(0, N), potential_2nd_max_p_nodes_1)).T
-            potential_2nd_max_p_nodes_2_select = np.vstack((np.arange(0, N), potential_2nd_max_p_nodes_2)).T
-            potential_2nd_max_p_1 = P.T[tuple(map(tuple, potential_2nd_max_p_nodes_1_select.T))]
-            potential_2nd_max_p_2 = P.T[tuple(map(tuple, potential_2nd_max_p_nodes_2_select.T))]
-            next_max_p_nodes = np.where(potential_2nd_max_p_1 > potential_2nd_max_p_2, potential_2nd_max_p_nodes_1, potential_2nd_max_p_nodes_2)
-            node_indices_diff = max_p_nodes - next_max_p_nodes
-            max_node_smaller_index = np.arange(0, N)[node_indices_diff < 0]
-            max_node_larger_index = np.arange(0, N)[node_indices_diff > 0]
-            dis_to_max_p_nodes = np.sqrt(np.sum(np.square(Y[max_p_nodes]-X), axis=1))
-            dis_to_2nd_largest_p_nodes = np.sqrt(np.sum(np.square(Y[next_max_p_nodes]-X), axis=1))
-            converted_P = np.zeros((M, N)).T
+        # if use_decoupling:
+        #     potential_2nd_max_p_nodes_1 = max_p_nodes - 1
+        #     potential_2nd_max_p_nodes_2 = max_p_nodes + 1
+        #     potential_2nd_max_p_nodes_1 = np.where(potential_2nd_max_p_nodes_1 < 0, 1, potential_2nd_max_p_nodes_1)
+        #     potential_2nd_max_p_nodes_2 = np.where(potential_2nd_max_p_nodes_2 > M-1, M-2, potential_2nd_max_p_nodes_2)
+        #     potential_2nd_max_p_nodes_1_select = np.vstack((np.arange(0, N), potential_2nd_max_p_nodes_1)).T
+        #     potential_2nd_max_p_nodes_2_select = np.vstack((np.arange(0, N), potential_2nd_max_p_nodes_2)).T
+        #     potential_2nd_max_p_1 = P.T[tuple(map(tuple, potential_2nd_max_p_nodes_1_select.T))]
+        #     potential_2nd_max_p_2 = P.T[tuple(map(tuple, potential_2nd_max_p_nodes_2_select.T))]
+        #     next_max_p_nodes = np.where(potential_2nd_max_p_1 > potential_2nd_max_p_2, potential_2nd_max_p_nodes_1, potential_2nd_max_p_nodes_2)
+        #     node_indices_diff = max_p_nodes - next_max_p_nodes
+        #     max_node_smaller_index = np.arange(0, N)[node_indices_diff < 0]
+        #     max_node_larger_index = np.arange(0, N)[node_indices_diff > 0]
+        #     dis_to_max_p_nodes = np.sqrt(np.sum(np.square(Y[max_p_nodes]-X), axis=1))
+        #     dis_to_2nd_largest_p_nodes = np.sqrt(np.sum(np.square(Y[next_max_p_nodes]-X), axis=1))
+        #     converted_P = np.zeros((M, N)).T
 
-            for idx in max_node_smaller_index:
-                converted_P[idx, 0:max_p_nodes[idx]+1] = converted_node_dis[max_p_nodes[idx], 0:max_p_nodes[idx]+1] + dis_to_max_p_nodes[idx]
-                converted_P[idx, next_max_p_nodes[idx]:M] = converted_node_dis[next_max_p_nodes[idx], next_max_p_nodes[idx]:M] + dis_to_2nd_largest_p_nodes[idx]
+        #     for idx in max_node_smaller_index:
+        #         converted_P[idx, 0:max_p_nodes[idx]+1] = converted_node_dis[max_p_nodes[idx], 0:max_p_nodes[idx]+1] + dis_to_max_p_nodes[idx]
+        #         converted_P[idx, next_max_p_nodes[idx]:M] = converted_node_dis[next_max_p_nodes[idx], next_max_p_nodes[idx]:M] + dis_to_2nd_largest_p_nodes[idx]
 
-            for idx in max_node_larger_index:
-                converted_P[idx, 0:next_max_p_nodes[idx]+1] = converted_node_dis[next_max_p_nodes[idx], 0:next_max_p_nodes[idx]+1] + dis_to_2nd_largest_p_nodes[idx]
-                converted_P[idx, max_p_nodes[idx]:M] = converted_node_dis[max_p_nodes[idx], max_p_nodes[idx]:M] + dis_to_max_p_nodes[idx]
+        #     for idx in max_node_larger_index:
+        #         converted_P[idx, 0:next_max_p_nodes[idx]+1] = converted_node_dis[next_max_p_nodes[idx], 0:next_max_p_nodes[idx]+1] + dis_to_2nd_largest_p_nodes[idx]
+        #         converted_P[idx, max_p_nodes[idx]:M] = converted_node_dis[max_p_nodes[idx], max_p_nodes[idx]:M] + dis_to_max_p_nodes[idx]
 
-            converted_P = converted_P.T
+        #     converted_P = converted_P.T
 
-            P = np.exp(-np.square(converted_P) / (2 * sigma2))
+        #     P = np.exp(-np.square(converted_P) / (2 * sigma2))
 
-            # if not on the same dlo, converted_P has to be >= 10 since z = 10
-            P = np.where(P < -10*10/(2 * sigma2), 0, P)
+        #     # if not on the same dlo, converted_P has to be >= 10 since z = 10
+        #     P = np.where(P < -10*10/(2 * sigma2), 0, P)
 
-            den = np.sum(P, axis=0)
-            den = np.tile(den, (M, 1))
-            den[den == 0] = np.finfo(float).eps
-            c = (2 * np.pi * sigma2) ** (D / 2)
-            c = c * mu / (1 - mu)
-            c = c * M / N
-            den += c
+        #     den = np.sum(P, axis=0)
+        #     den = np.tile(den, (M, 1))
+        #     den[den == 0] = np.finfo(float).eps
+        #     c = (2 * np.pi * sigma2) ** (D / 2)
+        #     c = c * mu / (1 - mu)
+        #     c = c * M / N
+        #     den += c
 
-            P = np.divide(P, den)
+        #     P = np.divide(P, den)
 
         Pt1 = np.sum(P, axis=0)
         P1 = np.sum(P, axis=1)
@@ -442,7 +439,6 @@ nodes = []
 # H = []
 cur_time = time.time()
 sigma2 = 0
-optimizer = DistanceConstrainedOptimizer(stretch_coefficient=1.05)
 
 def callback (rgb, depth, pc):
     global saved
@@ -452,7 +448,6 @@ def callback (rgb, depth, pc):
     global cur_time
     global sigma2
     global num_of_dlos
-    global optimizer
 
     proj_matrix = np.array([[918.359130859375,              0.0, 645.8908081054688, 0.0], \
                             [             0.0, 916.265869140625,   354.02392578125, 0.0], \
@@ -488,7 +483,6 @@ def callback (rgb, depth, pc):
         # for each object segment
         num_of_dlos = 0
         init_nodes_collection = []
-        edges_collection = []
 
         if use_first_frame_masks.lower() == 'false':
             # separate dlos (assume not entangled)
@@ -543,13 +537,12 @@ def callback (rgb, depth, pc):
                     edges = np.empty((nodes_per_dlo-1, 2), dtype=np.uint32)
                     edges[:, 0] = range((num_of_dlos-1)*nodes_per_dlo, num_of_dlos*nodes_per_dlo - 1)
                     edges[:, 1] = range((num_of_dlos-1)*nodes_per_dlo + 1, num_of_dlos*nodes_per_dlo)
-                    edges_collection.append(edges)
         else:
-            all_mask_imgs = os.listdir(os.path.dirname(os.path.abspath(__file__)) + '/utils/first_frame_segmentations/' + folder_name)
+            all_mask_imgs = os.listdir(os.path.dirname(os.path.abspath(__file__)) + '/segmentation/first_frame_segmentations/' + folder_name)
             for mask_img in all_mask_imgs:
                 num_of_dlos += 1
 
-                cur_mask = cv2.imread(os.path.dirname(os.path.abspath(__file__)) + '/utils/first_frame_segmentations/' + folder_name + '/' + mask_img)
+                cur_mask = cv2.imread(os.path.dirname(os.path.abspath(__file__)) + '/segmentation/first_frame_segmentations/' + folder_name + '/' + mask_img)
                 cur_mask = (cur_mask/255).astype(int)
                 filtered_pc = cur_pc * cur_mask
                 filtered_pc = filtered_pc[((filtered_pc[:, :, 0] != 0) | (filtered_pc[:, :, 1] != 0) | (filtered_pc[:, :, 2] != 0))]
@@ -584,13 +577,9 @@ def callback (rgb, depth, pc):
                 edges = np.empty((nodes_per_dlo-1, 2), dtype=np.uint32)
                 edges[:, 0] = range((num_of_dlos-1)*nodes_per_dlo, num_of_dlos*nodes_per_dlo - 1)
                 edges[:, 1] = range((num_of_dlos-1)*nodes_per_dlo + 1, num_of_dlos*nodes_per_dlo)
-                edges_collection.append(edges)
 
         init_nodes = np.vstack(init_nodes_collection)
-        edges_collection = np.vstack(edges_collection)
         initialized = True
-
-        optimizer.add_edges(template=init_nodes, edges=edges_collection)
 
     # continuous tracking
     if initialized:
@@ -624,10 +613,6 @@ def callback (rgb, depth, pc):
                                 use_decoupling = True, 
                                 use_prev_sigma2 = True, 
                                 sigma2_0 = sigma2)
-        
-        # ===== cdcpd optimizer. included here for testing, not included in the extended abstract =====
-        # optimization_result = optimizer.run(nodes)
-        # nodes = optimization_result.astype(nodes.dtype)
 
         init_nodes = nodes.copy()
 
@@ -686,7 +671,7 @@ def callback (rgb, depth, pc):
 
         header.stamp = rospy.Time.now()
         # converted_points = pcl2.create_cloud(header, fields, filtered_pc_colored)
-        pc_pub.publish(pc)
+        # pc_pub.publish(pc)
         
         tracking_img_msg = ros_numpy.msgify(Image, tracking_img, 'rgb8')
         tracking_img_pub.publish(tracking_img_msg)
@@ -711,9 +696,9 @@ if __name__=='__main__':
                 PointField('rgba', 12, PointField.UINT32, 1)]
     pc_pub = rospy.Publisher ('/pts', PointCloud2, queue_size=10)
 
-    tracking_img_pub = rospy.Publisher ('/tracking_img', Image, queue_size=10)
+    tracking_img_pub = rospy.Publisher ('/results_img', Image, queue_size=10)
     mask_img_pub = rospy.Publisher('/mask', Image, queue_size=10)
-    results_pub = rospy.Publisher ('/results', MarkerArray, queue_size=10)
+    results_pub = rospy.Publisher ('/results_marker', MarkerArray, queue_size=10)
 
     ts = message_filters.TimeSynchronizer([rgb_sub, depth_sub, pc_sub], 10)
     ts.registerCallback(callback)
