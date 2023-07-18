@@ -1,1 +1,1 @@
-This is probably going into my senior thesis
+Python and C++ implementation of extended abstract [Simultaneous Shape Tracking of Multiple Deformable Linear Objects with Global-Local Topology Preservation](https://deformable-workshop.github.io/icra2023/spotlight/21-XIANG-spotlight.pdf) (3rd Workshop on Representing and Manipulating Deformable Objects @ ICRA2023)
